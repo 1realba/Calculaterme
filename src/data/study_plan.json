@@ -1,0 +1,412 @@
+{
+  "program": {
+    "title": "تقنية شبكات الحاسب",
+    "englishTitle": "Computer Network Technology",
+    "department": "الحاسب وتقنية المعلومات",
+    "institution": "المؤسسة العامة للتدريب التقني والمهني",
+    "degree": "دبلوم الكليات التقنية",
+    "sasced_p": "06120104",
+    "sasced_l": "554",
+    "totalCreditHours": 71,
+    "totalContactHours": 1848,
+    "gradingSystem": {
+      "scale": 5.0,
+      "grades": [
+        { "letter": "A+", "nameAr": "ممتاز مرتفع", "minScore": 95, "maxScore": 100, "points": 5.0 },
+        { "letter": "A", "nameAr": "ممتاز", "minScore": 90, "maxScore": 94, "points": 4.75 },
+        { "letter": "B+", "nameAr": "جيد جداً مرتفع", "minScore": 85, "maxScore": 89, "points": 4.5 },
+        { "letter": "B", "nameAr": "جيد جداً", "minScore": 80, "maxScore": 84, "points": 4.0 },
+        { "letter": "C+", "nameAr": "جيد مرتفع", "minScore": 75, "maxScore": 79, "points": 3.5 },
+        { "letter": "C", "nameAr": "جيد", "minScore": 70, "maxScore": 74, "points": 3.0 },
+        { "letter": "D+", "nameAr": "مقبول مرتفع", "minScore": 65, "maxScore": 69, "points": 2.5 },
+        { "letter": "D", "nameAr": "مقبول", "minScore": 60, "maxScore": 64, "points": 2.0 },
+        { "letter": "F", "nameAr": "راسب", "minScore": 0, "maxScore": 59, "points": 1.0 }
+      ]
+    }
+  },
+  "semesters": [
+    {
+      "semesterNumber": 1,
+      "nameAr": "الفصل التدريبي الأول",
+      "nameEn": "1st Semester",
+      "totalCreditHours": 18,
+      "totalContactHours": 26,
+      "courses": [
+        {
+          "id": "engl-101",
+          "code": "ENGL 101",
+          "arabicCode": "101 انجل",
+          "nameAr": "لغة إنجليزية -1",
+          "nameEn": "English Language -1",
+          "creditHours": 3,
+          "lectureHours": 3,
+          "practicalHours": 0,
+          "tutorialHours": 1,
+          "contactHours": 4,
+          "prerequisite": null
+        },
+        {
+          "id": "icmt-101",
+          "code": "ICMT 101",
+          "arabicCode": "101 حاسب",
+          "nameAr": "مقدمة تطبيقات الحاسب",
+          "nameEn": "Introduction to Computer Applications",
+          "creditHours": 2,
+          "lectureHours": 0,
+          "practicalHours": 4,
+          "tutorialHours": 0,
+          "contactHours": 4,
+          "prerequisite": null
+        },
+        {
+          "id": "math-101",
+          "code": "MATH 101",
+          "arabicCode": "101 رياض",
+          "nameAr": "الرياضيات",
+          "nameEn": "Mathematics",
+          "creditHours": 3,
+          "lectureHours": 3,
+          "practicalHours": 0,
+          "tutorialHours": 1,
+          "contactHours": 4,
+          "prerequisite": null
+        },
+        {
+          "id": "phys-101",
+          "code": "PHYS 101",
+          "arabicCode": "101 فيزي",
+          "nameAr": "الفيزياء",
+          "nameEn": "Physics",
+          "creditHours": 3,
+          "lectureHours": 2,
+          "practicalHours": 2,
+          "tutorialHours": 0,
+          "contactHours": 4,
+          "prerequisite": null
+        },
+        {
+          "id": "icmt-121",
+          "code": "ICMT 121",
+          "arabicCode": "121 حاسب",
+          "nameAr": "تجميع الحاسب وتشغيله",
+          "nameEn": "Computer Assembly and Operating",
+          "creditHours": 3,
+          "lectureHours": 1,
+          "practicalHours": 4,
+          "tutorialHours": 0,
+          "contactHours": 5,
+          "prerequisite": null
+        },
+        {
+          "id": "inet-111",
+          "code": "INET 111",
+          "arabicCode": "111 شبكا",
+          "nameAr": "مبادئ شبكات الحاسب",
+          "nameEn": "Network Fundamentals",
+          "creditHours": 4,
+          "lectureHours": 3,
+          "practicalHours": 2,
+          "tutorialHours": 0,
+          "contactHours": 5,
+          "prerequisite": null
+        }
+      ]
+    },
+    {
+      "semesterNumber": 2,
+      "nameAr": "الفصل التدريبي الثاني",
+      "nameEn": "2nd Semester",
+      "totalCreditHours": 17,
+      "totalContactHours": 24,
+      "courses": [
+        {
+          "id": "engl-102",
+          "code": "ENGL 102",
+          "arabicCode": "102 انجل",
+          "nameAr": "لغة إنجليزية -2",
+          "nameEn": "English Language -2",
+          "creditHours": 3,
+          "lectureHours": 3,
+          "practicalHours": 0,
+          "tutorialHours": 1,
+          "contactHours": 4,
+          "prerequisite": "101 انجل (ENGL 101)"
+        },
+        {
+          "id": "entr-101",
+          "code": "ENTR 101",
+          "arabicCode": "101 رياد",
+          "nameAr": "أساسيات ريادة الأعمال",
+          "nameEn": "Fundamental of Entrepreneurship",
+          "creditHours": 2,
+          "lectureHours": 2,
+          "practicalHours": 0,
+          "tutorialHours": 0,
+          "contactHours": 2,
+          "prerequisite": null
+        },
+        {
+          "id": "arab-101",
+          "code": "ARAB 101",
+          "arabicCode": "101 عربي",
+          "nameAr": "الكتابة الفنية",
+          "nameEn": "Technical Writing",
+          "creditHours": 2,
+          "lectureHours": 2,
+          "practicalHours": 0,
+          "tutorialHours": 0,
+          "contactHours": 2,
+          "prerequisite": null
+        },
+        {
+          "id": "icmt-102",
+          "code": "ICMT 102",
+          "arabicCode": "102 حاسب",
+          "nameAr": "تطبيقات الحاسب المتقدمة",
+          "nameEn": "Advanced Computer Applications",
+          "creditHours": 2,
+          "lectureHours": 0,
+          "practicalHours": 4,
+          "tutorialHours": 0,
+          "contactHours": 4,
+          "prerequisite": "101 حاسب (ICMT 101)"
+        },
+        {
+          "id": "isup-151",
+          "code": "ISUP 151",
+          "arabicCode": "151 داعم",
+          "nameAr": "نظم التشغيل -1",
+          "nameEn": "Operating System -1",
+          "creditHours": 4,
+          "lectureHours": 2,
+          "practicalHours": 4,
+          "tutorialHours": 0,
+          "contactHours": 6,
+          "prerequisite": "121 حاسب (ICMT 121)"
+        },
+        {
+          "id": "inet-121",
+          "code": "INET 121",
+          "arabicCode": "121 شبكا",
+          "nameAr": "التوجيه والتحويل -1",
+          "nameEn": "Routing and Switching- 1",
+          "creditHours": 4,
+          "lectureHours": 2,
+          "practicalHours": 4,
+          "tutorialHours": 0,
+          "contactHours": 6,
+          "prerequisite": "111 شبكا (INET 111)"
+        }
+      ]
+    },
+    {
+      "semesterNumber": 3,
+      "nameAr": "الفصل التدريبي الثالث",
+      "nameEn": "3rd Semester",
+      "totalCreditHours": 18,
+      "totalContactHours": 26,
+      "courses": [
+        {
+          "id": "engl-103",
+          "code": "ENGL 103",
+          "arabicCode": "103 انجل",
+          "nameAr": "لغة إنجليزية -3",
+          "nameEn": "English Language -3",
+          "creditHours": 3,
+          "lectureHours": 3,
+          "practicalHours": 0,
+          "tutorialHours": 1,
+          "contactHours": 4,
+          "prerequisite": "102 انجل (ENGL 102)"
+        },
+        {
+          "id": "entr-212",
+          "code": "ENTR 212",
+          "arabicCode": "212 رياد",
+          "nameAr": "ريادة الاعمال في مجال الحاسب وتقنية المعلومات",
+          "nameEn": "Entrepreneurship in Computer and Information Technology",
+          "creditHours": 2,
+          "lectureHours": 1,
+          "practicalHours": 2,
+          "tutorialHours": 0,
+          "contactHours": 3,
+          "prerequisite": "101 رياد (ENTR 101)"
+        },
+        {
+          "id": "inet-231",
+          "code": "INET 231",
+          "arabicCode": "231 شبكا",
+          "nameAr": "مقدمة في أمن الشبكات",
+          "nameEn": "Introduction to Network Security",
+          "creditHours": 3,
+          "lectureHours": 2,
+          "practicalHours": 2,
+          "tutorialHours": 0,
+          "contactHours": 4,
+          "prerequisite": "121 شبكا (INET 121)"
+        },
+        {
+          "id": "isup-252",
+          "code": "ISUP 252",
+          "arabicCode": "252 داعم",
+          "nameAr": "نظم التشغيل -2",
+          "nameEn": "Operating System -2",
+          "creditHours": 4,
+          "lectureHours": 2,
+          "practicalHours": 4,
+          "tutorialHours": 0,
+          "contactHours": 6,
+          "prerequisite": "121 حاسب (ICMT 121)"
+        },
+        {
+          "id": "inet-222",
+          "code": "INET 222",
+          "arabicCode": "222 شبكا",
+          "nameAr": "التوجيه والتحويل -2",
+          "nameEn": "Routing and Switching- 2",
+          "creditHours": 4,
+          "lectureHours": 2,
+          "practicalHours": 4,
+          "tutorialHours": 0,
+          "contactHours": 6,
+          "prerequisite": "121 شبكا (INET 121)"
+        },
+        {
+          "id": "inet-285",
+          "code": "INET 285",
+          "arabicCode": "285 شبكا",
+          "nameAr": "موضوعات مختارة",
+          "nameEn": "Selected Topics",
+          "creditHours": 2,
+          "lectureHours": 1,
+          "practicalHours": 2,
+          "tutorialHours": 0,
+          "contactHours": 3,
+          "prerequisite": "121 شبكا (INET 121)"
+        }
+      ]
+    },
+    {
+      "semesterNumber": 4,
+      "nameAr": "الفصل التدريبي الرابع",
+      "nameEn": "4th Semester",
+      "totalCreditHours": 16,
+      "totalContactHours": 22,
+      "courses": [
+        {
+          "id": "engl-204",
+          "code": "ENGL 204",
+          "arabicCode": "204 انجل",
+          "nameAr": "لغة إنجليزية -4",
+          "nameEn": "English Language -4",
+          "creditHours": 3,
+          "lectureHours": 3,
+          "practicalHours": 0,
+          "tutorialHours": 1,
+          "contactHours": 4,
+          "prerequisite": "103 انجل (ENGL 103)"
+        },
+        {
+          "id": "islm-101",
+          "code": "ISLM 101",
+          "arabicCode": "101 اسلم",
+          "nameAr": "الدراسات الإسلامية",
+          "nameEn": "Islamic Studies",
+          "creditHours": 2,
+          "lectureHours": 2,
+          "practicalHours": 0,
+          "tutorialHours": 0,
+          "contactHours": 2,
+          "prerequisite": null
+        },
+        {
+          "id": "eths-201",
+          "code": "ETHS 201",
+          "arabicCode": "201 اسلك",
+          "nameAr": "السلوك الوظيفي والمستقبل المهني",
+          "nameEn": "Professional Ethics & Professional future",
+          "creditHours": 2,
+          "lectureHours": 2,
+          "practicalHours": 0,
+          "tutorialHours": 0,
+          "contactHours": 2,
+          "prerequisite": null
+        },
+        {
+          "id": "icmt-280",
+          "code": "ICMT 280",
+          "arabicCode": "280 حاسب",
+          "nameAr": "التأهيل للشهادات الاحترافية",
+          "nameEn": "Preparation for Professional Certificates",
+          "creditHours": 1,
+          "lectureHours": 1,
+          "practicalHours": 0,
+          "tutorialHours": 0,
+          "contactHours": 1,
+          "prerequisite": null
+        },
+        {
+          "id": "inet-232",
+          "code": "INET 232",
+          "arabicCode": "232 شبكا",
+          "nameAr": "أمن الشبكات المتقدم",
+          "nameEn": "Advance Network Security",
+          "creditHours": 3,
+          "lectureHours": 2,
+          "practicalHours": 2,
+          "tutorialHours": 0,
+          "contactHours": 4,
+          "prerequisite": "231 شبكا (INET 231)"
+        },
+        {
+          "id": "inet-241",
+          "code": "INET 241",
+          "arabicCode": "241 شبكا",
+          "nameAr": "ربط الشبكات",
+          "nameEn": "Connecting Networks",
+          "creditHours": 3,
+          "lectureHours": 1,
+          "practicalHours": 4,
+          "tutorialHours": 1,
+          "contactHours": 6,
+          "prerequisite": "222 شبكا (INET 222)"
+        },
+        {
+          "id": "inet-295",
+          "code": "INET 295",
+          "arabicCode": "295 شبكا",
+          "nameAr": "مشروع",
+          "nameEn": "Project",
+          "creditHours": 2,
+          "lectureHours": 1,
+          "practicalHours": 2,
+          "tutorialHours": 0,
+          "contactHours": 3,
+          "prerequisite": "222 شبكا (INET 222)"
+        }
+      ]
+    },
+    {
+      "semesterNumber": 5,
+      "nameAr": "الفصل التدريبي الخامس",
+      "nameEn": "5th Semester",
+      "totalCreditHours": 2,
+      "totalContactHours": 280,
+      "courses": [
+        {
+          "id": "inet-299",
+          "code": "INET 299",
+          "arabicCode": "299 شبكا",
+          "nameAr": "التدريب التعاوني",
+          "nameEn": "Co-operative Training",
+          "creditHours": 2,
+          "lectureHours": 0,
+          "practicalHours": 0,
+          "tutorialHours": 0,
+          "contactHours": 280,
+          "prerequisite": "اجتياز جميع مقررات الفصول السابقة"
+        }
+      ]
+    }
+  ]
+}
