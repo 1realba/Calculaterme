@@ -4,17 +4,21 @@ import { Award, BookOpen, CheckCircle2, RotateCcw, Sparkles, Printer, Graduation
 interface Props {
   cumulative: CumulativeCalculation;
   currentTermCalc: SemesterCalculation | null;
+  majorTitle?: string;
   onResetGrades: () => void;
   onFillSampleGrades: () => void;
   onPrint: () => void;
+  onChangeMajor?: () => void;
 }
 
 export default function GpaDashboard({
   cumulative,
   currentTermCalc,
+  majorTitle = 'تقنية الحاسب والمعلومات',
   onResetGrades,
   onFillSampleGrades,
   onPrint,
+  onChangeMajor,
 }: Props) {
   const getGpaBadge = (gpa: number) => {
     if (gpa >= 4.75) return 'text-[#006B3F] bg-emerald-50 border-emerald-300';
@@ -86,7 +90,7 @@ export default function GpaDashboard({
             <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900">
               {cumulative.totalCompletedHours}
             </span>
-            <span className="text-xs text-slate-400 font-bold">من 71 ساعة تخرج</span>
+            <span className="text-xs text-slate-400 font-bold">من {cumulative.totalDegreeHours} ساعة تخرج</span>
           </div>
           <div className="space-y-1">
             <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
@@ -149,9 +153,20 @@ export default function GpaDashboard({
             </button>
           </div>
 
-          <div className="text-[11px] text-emerald-200/80 flex items-center justify-between">
-            <span>الخطة التدريبية:</span>
-            <span className="font-bold text-white">شبكات الحاسب</span>
+          <div className="text-[11px] text-emerald-200/80 flex items-center justify-between gap-1">
+            <span className="shrink-0">الخطة:</span>
+            <span className="font-bold text-white truncate max-w-[150px]" title={majorTitle}>
+              {majorTitle}
+            </span>
+            {onChangeMajor && (
+              <button
+                type="button"
+                onClick={onChangeMajor}
+                className="text-[10px] text-[#E6C673] underline hover:text-white cursor-pointer shrink-0"
+              >
+                تغيير
+              </button>
+            )}
           </div>
         </div>
       </div>

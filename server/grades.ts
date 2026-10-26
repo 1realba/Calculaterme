@@ -8,8 +8,8 @@ import {
 import fs from 'fs';
 import path from 'path';
 
-export async function getUserGrades(userId: number) {
-  const records = await fetchUserGrades(userId);
+export async function getUserGrades(userId: number, majorId?: string) {
+  const records = await fetchUserGrades(userId, majorId);
   return records.map((r) => ({
     courseId: r.course_id,
     semesterNumber: r.semester_number,
@@ -29,18 +29,19 @@ export async function saveUserGrades(
     numericalScore?: number;
     gradePoints?: number;
     status?: string;
-  }>
+  }>,
+  majorId: string = 'networks'
 ) {
-  await upsertUserGrades(userId, gradesList);
-  return getUserGrades(userId);
+  await upsertUserGrades(userId, gradesList, majorId);
+  return getUserGrades(userId, majorId);
 }
 
-export async function resetUserGrades(userId: number) {
-  await clearUserGrades(userId);
+export async function resetUserGrades(userId: number, majorId?: string) {
+  await clearUserGrades(userId, majorId);
   return [];
 }
 
-export async function resetSemesterGrades(userId: number, semesterNumber: number) {
+export async function resetSemesterGrades(userId: number, semesterNumber: number, majorId?: string) {
   let courseIds: string[] = [];
   try {
     const plan = getStudyPlan();
@@ -51,13 +52,13 @@ export async function resetSemesterGrades(userId: number, semesterNumber: number
   } catch (err) {
     console.error('Error finding semester courses in plan:', err);
   }
-  await clearUserSemesterGrades(userId, semesterNumber, courseIds);
-  return getUserGrades(userId);
+  await clearUserSemesterGrades(userId, semesterNumber, courseIds, majorId);
+  return getUserGrades(userId, majorId);
 }
 
-export async function resetSingleCourseGrade(userId: number, courseId: string) {
-  await clearUserSingleCourseGrade(userId, courseId);
-  return getUserGrades(userId);
+export async function resetSingleCourseGrade(userId: number, courseId: string, majorId?: string) {
+  await clearUserSingleCourseGrade(userId, courseId, majorId);
+  return getUserGrades(userId, majorId);
 }
 
 export function getStudyPlan() {

@@ -50,9 +50,9 @@ function saveLocalUsers(users: LocalUserRecord[]) {
   }
 }
 
-function getLocalGrades(userId: number): CourseGradeState[] {
+function getLocalGrades(userId: number, majorId: string = 'default'): CourseGradeState[] {
   try {
-    const raw = localStorage.getItem(`tvtc_grades_${userId}`);
+    const raw = localStorage.getItem(`tvtc_grades_${userId}_${majorId}`) || (majorId === 'networks' ? localStorage.getItem(`tvtc_grades_${userId}`) : null);
     if (raw) {
       return JSON.parse(raw);
     }
@@ -62,9 +62,9 @@ function getLocalGrades(userId: number): CourseGradeState[] {
   return [];
 }
 
-function saveLocalGrades(userId: number, grades: CourseGradeState[]) {
+function saveLocalGrades(userId: number, majorId: string = 'default', grades: CourseGradeState[]) {
   try {
-    localStorage.setItem(`tvtc_grades_${userId}`, JSON.stringify(grades));
+    localStorage.setItem(`tvtc_grades_${userId}_${majorId}`, JSON.stringify(grades));
   } catch (e) {
     console.error(e);
   }
@@ -261,18 +261,34 @@ export async function apiLogout(): Promise<void> {
   localStorage.removeItem(CURRENT_USER_KEY);
 }
 
-export async function apiGetGrades(user: User): Promise<CourseGradeState[]> {
+export function apiSaveUserMajor(user: User, majorId: string): User {
+  const updated: User = { ...user, majorId };
+  try {
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(updated));
+    const users = getLocalUsers();
+    const idx = users.findIndex((u) => u.id === user.id);
+    if (idx >= 0) {
+      users[idx].majorId = majorId;
+      saveLocalUsers(users);
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  return updated;
+}
+
+export async function apiGetGrades(user: User, majorId: string = 'networks'): Promise<CourseGradeState[]> {
   const token = localStorage.getItem(TOKEN_KEY);
 
   // Try server
   if (token) {
     try {
-      const res = await fetch('/api/grades', {
+      const res = await fetch(`/api/grades?majorId=${encodeURIComponent(majorId)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await parseJsonResponse(res);
       if (data && Array.isArray(data.grades)) {
-        saveLocalGrades(user.id, data.grades);
+        saveLocalGrades(user.id, majorId, data.grades);
         return data.grades;
       }
     } catch {
@@ -281,11 +297,15 @@ export async function apiGetGrades(user: User): Promise<CourseGradeState[]> {
   }
 
   // Fallback
-  return getLocalGrades(user.id);
+  return getLocalGrades(user.id, majorId);
 }
 
-export async function apiSaveGrades(user: User, gradesList: CourseGradeState[]): Promise<void> {
-  saveLocalGrades(user.id, gradesList);
+export async function apiSaveGrades(
+  user: User,
+  gradesList: CourseGradeState[],
+  majorId: string = 'networks'
+): Promise<void> {
+  saveLocalGrades(user.id, majorId, gradesList);
 
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) {
@@ -296,7 +316,7 @@ export async function apiSaveGrades(user: User, gradesList: CourseGradeState[]):
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ grades: gradesList }),
+        body: JSON.stringify({ grades: gradesList, majorId }),
       });
     } catch {
       // ignore server failure in static mode
@@ -304,15 +324,19 @@ export async function apiSaveGrades(user: User, gradesList: CourseGradeState[]):
   }
 }
 
-export async function apiResetAllGrades(user: User): Promise<void> {
-  saveLocalGrades(user.id, []);
+export async function apiResetAllGrades(user: User, majorId: string = 'networks'): Promise<void> {
+  saveLocalGrades(user.id, majorId, []);
 
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) {
     try {
       await fetch('/api/grades/reset', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ majorId }),
       });
     } catch {
       // ignore
@@ -323,14 +347,15 @@ export async function apiResetAllGrades(user: User): Promise<void> {
 export async function apiResetSemesterGrades(
   user: User,
   semesterNumber: number,
-  courseIds: string[]
+  courseIds: string[],
+  majorId: string = 'networks'
 ): Promise<void> {
-  const current = getLocalGrades(user.id);
+  const current = getLocalGrades(user.id, majorId);
   const idSet = new Set(courseIds);
   const filtered = current.filter(
     (g) => !(g.semesterNumber === semesterNumber || idSet.has(g.courseId))
   );
-  saveLocalGrades(user.id, filtered);
+  saveLocalGrades(user.id, majorId, filtered);
 
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) {
@@ -341,7 +366,7 @@ export async function apiResetSemesterGrades(
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ semesterNumber }),
+        body: JSON.stringify({ semesterNumber, majorId }),
       });
     } catch {
       // ignore
@@ -349,10 +374,14 @@ export async function apiResetSemesterGrades(
   }
 }
 
-export async function apiResetCourseGrade(user: User, courseId: string): Promise<void> {
-  const current = getLocalGrades(user.id);
+export async function apiResetCourseGrade(
+  user: User,
+  courseId: string,
+  majorId: string = 'networks'
+): Promise<void> {
+  const current = getLocalGrades(user.id, majorId);
   const filtered = current.filter((g) => g.courseId !== courseId);
-  saveLocalGrades(user.id, filtered);
+  saveLocalGrades(user.id, majorId, filtered);
 
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) {
@@ -363,7 +392,7 @@ export async function apiResetCourseGrade(user: User, courseId: string): Promise
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ courseId }),
+        body: JSON.stringify({ courseId, majorId }),
       });
     } catch {
       // ignore

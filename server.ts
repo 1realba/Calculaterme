@@ -122,7 +122,8 @@ async function startServer() {
   // Get user's saved grades
   app.get('/api/grades', requireAuth, async (req: any, res) => {
     try {
-      const grades = await getUserGrades(req.user.id);
+      const majorId = (req.query.majorId as string) || 'networks';
+      const grades = await getUserGrades(req.user.id, majorId);
       res.json({ grades });
     } catch (err: any) {
       res.status(500).json({ error: 'تعذر استرجاع الدرجات من السجل' });
@@ -132,11 +133,11 @@ async function startServer() {
   // Save/Update user's grades
   app.post('/api/grades', requireAuth, async (req: any, res) => {
     try {
-      const { grades } = req.body;
+      const { grades, majorId } = req.body;
       if (!Array.isArray(grades)) {
         return res.status(400).json({ error: 'تنسيق البيانات غير صحيح' });
       }
-      const updatedGrades = await saveUserGrades(req.user.id, grades);
+      const updatedGrades = await saveUserGrades(req.user.id, grades, majorId || 'networks');
       res.json({
         success: true,
         message: 'تم حفظ الدرجات وتحديث السجل بنجاح',
@@ -150,7 +151,8 @@ async function startServer() {
   // Reset ALL user's grades
   app.post('/api/grades/reset', requireAuth, async (req: any, res) => {
     try {
-      await resetUserGrades(req.user.id);
+      const { majorId } = req.body;
+      await resetUserGrades(req.user.id, majorId || 'networks');
       res.json({ success: true, message: 'تم تصفير جميع درجات الخطة بنجاح' });
     } catch (err: any) {
       res.status(500).json({ error: 'فشل في تصفير جميع المواد' });
@@ -160,11 +162,11 @@ async function startServer() {
   // Reset semester grades
   app.post('/api/grades/reset-semester', requireAuth, async (req: any, res) => {
     try {
-      const { semesterNumber } = req.body;
+      const { semesterNumber, majorId } = req.body;
       if (typeof semesterNumber !== 'number') {
         return res.status(400).json({ error: 'رقم الفصل مطلوب' });
       }
-      const grades = await resetSemesterGrades(req.user.id, semesterNumber);
+      const grades = await resetSemesterGrades(req.user.id, semesterNumber, majorId || 'networks');
       res.json({
         success: true,
         message: `تم تصفير مواد الفصل ${semesterNumber} بنجاح`,
@@ -178,11 +180,11 @@ async function startServer() {
   // Reset single course grade
   app.post('/api/grades/reset-course', requireAuth, async (req: any, res) => {
     try {
-      const { courseId } = req.body;
+      const { courseId, majorId } = req.body;
       if (!courseId) {
         return res.status(400).json({ error: 'معرّف المادة مطلوب' });
       }
-      const grades = await resetSingleCourseGrade(req.user.id, courseId);
+      const grades = await resetSingleCourseGrade(req.user.id, courseId, majorId || 'networks');
       res.json({
         success: true,
         message: 'تم تصفير المادة بنجاح',

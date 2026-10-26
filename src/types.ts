@@ -64,6 +64,7 @@ export interface User {
   username: string;
   fullName: string;
   studentId?: string;
+  majorId?: string;
   createdAt?: string;
 }
 

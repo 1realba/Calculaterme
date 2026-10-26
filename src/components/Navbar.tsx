@@ -1,14 +1,23 @@
 import { User } from '../types.ts';
-import { LogOut, FileJson, GraduationCap, CheckCircle2, RefreshCw } from 'lucide-react';
+import { LogOut, FileJson, GraduationCap, CheckCircle2, RefreshCw, Layers } from 'lucide-react';
 
 interface Props {
   user: User;
+  majorTitle: string;
   onLogout: () => void;
   onOpenJsonModal: () => void;
+  onChangeMajor: () => void;
   isSaving?: boolean;
 }
 
-export default function Navbar({ user, onLogout, onOpenJsonModal, isSaving }: Props) {
+export default function Navbar({
+  user,
+  majorTitle,
+  onLogout,
+  onOpenJsonModal,
+  onChangeMajor,
+  isSaving,
+}: Props) {
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
       {/* Top Green TVTC Ribbon */}
@@ -37,8 +46,8 @@ export default function Navbar({ user, onLogout, onOpenJsonModal, isSaving }: Pr
                   بوابة المتدرب
                 </span>
               </div>
-              <p className="text-xs text-slate-500 hidden sm:block">
-                دبلوم تقنية شبكات الحاسب • الخطة التدريبية المعتمدة
+              <p className="text-xs text-emerald-800 font-semibold hidden sm:block">
+                {majorTitle} • الخطة التدريبية المعتمدة
               </p>
             </div>
           </div>
@@ -60,6 +69,18 @@ export default function Navbar({ user, onLogout, onOpenJsonModal, isSaving }: Pr
                 </>
               )}
             </div>
+
+            {/* Change Major Button */}
+            <button
+              id="change-major-btn"
+              type="button"
+              onClick={onChangeMajor}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-[#006B3F] text-xs font-bold transition cursor-pointer"
+              title="عرض وتغيير التخصص الأكاديمي"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>التخصصات</span>
+            </button>
 
             {/* Study Plan JSON Button */}
             <button

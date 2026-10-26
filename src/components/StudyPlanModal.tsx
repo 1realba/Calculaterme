@@ -25,9 +25,10 @@ export default function StudyPlanModal({ isOpen, onClose, studyPlan }: Props) {
   const handleDownload = () => {
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
+    const cleanName = (studyPlan.program.englishTitle || studyPlan.program.title).toLowerCase().replace(/\s+/g, '_');
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'study_plan_network_technology.json';
+    a.download = `study_plan_${cleanName}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -45,10 +46,10 @@ export default function StudyPlanModal({ isOpen, onClose, studyPlan }: Props) {
             </div>
             <div>
               <h3 className="font-bold text-slate-800 text-sm sm:text-base">
-                ملف الخطة الدراسية (study_plan.json)
+                ملف الخطة الدراسية ({studyPlan.program.title})
               </h3>
               <p className="text-[11px] text-slate-500">
-                الخطة الرسمية لدبلوم تقنية شبكات الحاسب - الكليات التقنية 1446هـ
+                الخطة التدريبية المعتمدة لـ {studyPlan.program.title} - الكلية التقنية 1446هـ
               </p>
             </div>
           </div>

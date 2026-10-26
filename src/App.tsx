@@ -10,7 +10,8 @@ import GpaDashboard from './components/GpaDashboard.tsx';
 import SemesterView from './components/SemesterView.tsx';
 import FullPlanSummary from './components/FullPlanSummary.tsx';
 import StudyPlanModal from './components/StudyPlanModal.tsx';
-import defaultStudyPlan from './data/study_plan.json';
+import MajorSelectionView from './components/MajorSelectionView.tsx';
+import { ALL_MAJORS, MajorInfo, getMajorById } from './data/all_majors.ts';
 import { User, CourseGradeState, StudyPlanData } from './types.ts';
 import { calculateCumulativeGPA, calculateSemesterGPA, findCourseSemester } from './utils/calculator.ts';
 import { Layers, CheckCircle2, Bookmark, GraduationCap, AlertTriangle, RotateCcw, X } from 'lucide-react';
@@ -21,13 +22,21 @@ import {
   apiResetAllGrades,
   apiResetSemesterGrades,
   apiResetCourseGrade,
+  apiSaveUserMajor,
   apiLogout,
 } from './utils/api.ts';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [studyPlan] = useState<StudyPlanData>(defaultStudyPlan as unknown as StudyPlanData);
+
+  // Selected Major state
+  const [selectedMajor, setSelectedMajor] = useState<MajorInfo | null>(() => {
+    const savedMajorId = localStorage.getItem('tvtc_active_major_id');
+    return savedMajorId ? getMajorById(savedMajorId) : null;
+  });
+  const [isChangingMajor, setIsChangingMajor] = useState(false);
+
   const [activeTab, setActiveTab] = useState<number | 'full'>(1);
   const [gradesMap, setGradesMap] = useState<Record<string, CourseGradeState>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -40,11 +49,25 @@ export default function App() {
     onConfirm: () => void;
   } | null>(null);
 
+  // Current active study plan
+  const studyPlan: StudyPlanData = useMemo(() => {
+    return selectedMajor ? selectedMajor.plan : ALL_MAJORS[0].plan;
+  }, [selectedMajor]);
+
   // Check auth session on startup
   useEffect(() => {
     apiGetMe()
       .then((user) => {
-        setCurrentUser(user);
+        if (user) {
+          setCurrentUser(user);
+          if (user.majorId) {
+            const major = getMajorById(user.majorId);
+            setSelectedMajor(major);
+            localStorage.setItem('tvtc_active_major_id', major.id);
+          }
+        } else {
+          setCurrentUser(null);
+        }
       })
       .catch(() => {
         setCurrentUser(null);
@@ -54,11 +77,11 @@ export default function App() {
       });
   }, []);
 
-  // Fetch saved grades when user logs in
+  // Fetch saved grades when user logs in or switches major
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !selectedMajor) return;
 
-    apiGetGrades(currentUser)
+    apiGetGrades(currentUser, selectedMajor.id)
       .then((grades) => {
         if (grades && Array.isArray(grades)) {
           const map: Record<string, CourseGradeState> = {};
@@ -66,12 +89,14 @@ export default function App() {
             map[g.courseId] = g;
           }
           setGradesMap(map);
+        } else {
+          setGradesMap({});
         }
       })
       .catch((err) => {
-        console.error('Error fetching grades:', err);
+        console.error('Error fetching grades for major:', err);
       });
-  }, [currentUser]);
+  }, [currentUser, selectedMajor]);
 
   // Show toast notification
   const showToast = (msg: string) => {
@@ -81,22 +106,48 @@ export default function App() {
     }, 3000);
   };
 
+  // Handle Major Selection
+  const handleSelectMajor = (major: MajorInfo) => {
+    setSelectedMajor(major);
+    setIsChangingMajor(false);
+    setActiveTab(1);
+    localStorage.setItem('tvtc_active_major_id', major.id);
+
+    if (currentUser) {
+      const updated = apiSaveUserMajor(currentUser, major.id);
+      setCurrentUser(updated);
+
+      // Load grades for the newly selected major
+      apiGetGrades(updated, major.id).then((grades) => {
+        const map: Record<string, CourseGradeState> = {};
+        if (grades && Array.isArray(grades)) {
+          for (const g of grades) {
+            map[g.courseId] = g;
+          }
+        }
+        setGradesMap(map);
+      });
+    }
+
+    showToast(`تم اختيار تخصص: ${major.nameAr}`);
+  };
+
   // Save grades to persistent store
   const saveGradesToDb = useCallback(
     async (updatedMap: Record<string, CourseGradeState>) => {
-      if (!currentUser) return;
+      if (!currentUser || !selectedMajor) return;
 
       setIsSaving(true);
       try {
         const gradesList = Object.values(updatedMap);
-        await apiSaveGrades(currentUser, gradesList);
+        await apiSaveGrades(currentUser, gradesList, selectedMajor.id);
       } catch (err) {
         console.error('Failed to auto-save grades:', err);
       } finally {
         setIsSaving(false);
       }
     },
-    [currentUser]
+    [currentUser, selectedMajor]
   );
 
   // Update a course grade
@@ -119,9 +170,10 @@ export default function App() {
 
   // Reset ALL grades in the entire plan (opens modal)
   const handleResetGrades = () => {
+    if (!selectedMajor) return;
     setConfirmResetModal({
       isOpen: true,
-      title: 'تأكيد تصفير جميع درجات الخطة التدريبية',
+      title: `تأكيد تصفير درجات خطة "${selectedMajor.nameAr}"`,
       description: 'هل أنت متأكد من تصفير كافة درجات الخطة التدريبية بالكامل؟ سيتم إعادة ضبط السجل الأكاديمي وإرجاع المعدل التراكمي إلى 0.00 فوراً.',
       onConfirm: async () => {
         // 1. Instantly reset client state
@@ -130,7 +182,7 @@ export default function App() {
 
         // 2. Clear via api layer
         if (currentUser) {
-          await apiResetAllGrades(currentUser);
+          await apiResetAllGrades(currentUser, selectedMajor.id);
         }
         showToast('تم تصفير جميع مواد الخطة التدريبية بنجاح وإعادة ضبط المعدل التراكمي إلى 0.00');
       },
@@ -139,6 +191,7 @@ export default function App() {
 
   // Reset grades for a specific semester (opens modal)
   const handleResetSemesterCourses = (semesterNumber: number) => {
+    if (!selectedMajor) return;
     const targetSemester = studyPlan.semesters.find((s) => s.semesterNumber === semesterNumber);
     const semName = targetSemester?.nameAr || `الفصل ${semesterNumber}`;
 
@@ -159,7 +212,7 @@ export default function App() {
         setConfirmResetModal(null);
 
         if (currentUser) {
-          await apiResetSemesterGrades(currentUser, semesterNumber, courseIds);
+          await apiResetSemesterGrades(currentUser, semesterNumber, courseIds, selectedMajor.id);
         }
         showToast(`تم تصفير مواد ${semName} بنجاح وإعادة احتساب المعدل`);
       },
@@ -168,6 +221,7 @@ export default function App() {
 
   // Reset a single course grade immediately
   const handleResetCourseGrade = async (courseId: string) => {
+    if (!selectedMajor) return;
     setGradesMap((prev) => {
       const next = { ...prev };
       delete next[courseId];
@@ -175,7 +229,7 @@ export default function App() {
     });
 
     if (currentUser) {
-      await apiResetCourseGrade(currentUser, courseId);
+      await apiResetCourseGrade(currentUser, courseId, selectedMajor.id);
     }
     showToast('تم تصفير المادة بنجاح');
   };
@@ -216,6 +270,8 @@ export default function App() {
   const handleLogout = async () => {
     await apiLogout();
     setCurrentUser(null);
+    setSelectedMajor(null);
+    setIsChangingMajor(false);
     setGradesMap({});
   };
 
@@ -240,15 +296,77 @@ export default function App() {
     );
   }
 
+  // Not logged in: Show Auth (Login / Register) View
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-[#f5f7fa] flex flex-col justify-between">
         <AuthView
           onSuccess={(user) => {
             setCurrentUser(user);
+            if (user.majorId) {
+              const major = getMajorById(user.majorId);
+              setSelectedMajor(major);
+              localStorage.setItem('tvtc_active_major_id', major.id);
+            } else {
+              setSelectedMajor(null); // Triggers Major Selection screen!
+            }
             showToast(`أهلاً بك يا ${user.fullName} في بوابة الكلية التقنية`);
           }}
         />
+        <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
+          المملكة العربية السعودية • المؤسسة العامة للتدريب التقني والمهني (TVTC)
+        </footer>
+      </div>
+    );
+  }
+
+  // Logged in, but has not selected major OR clicked "تغيير التخصص"
+  if (!selectedMajor || isChangingMajor) {
+    return (
+      <div className="min-h-screen bg-[#f5f7fa] flex flex-col justify-between">
+        {/* Top Minimal Header */}
+        <header className="bg-white border-b border-slate-200 py-3 px-4 sm:px-8 shadow-xs">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-[#006B3F] text-white flex items-center justify-center border border-[#C5A059]">
+                <GraduationCap className="w-5 h-5 text-[#E6C673]" />
+              </div>
+              <div>
+                <span className="font-extrabold text-slate-900 text-sm block">الكلية التقنية</span>
+                <span className="text-[11px] text-slate-500">قسم الحاسب وتقنية المعلومات</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="text-right hidden sm:block">
+                <span className="text-xs font-bold text-slate-800 block">{currentUser.fullName}</span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {currentUser.studentId ? `الرقم التدريبي: ${currentUser.studentId}` : `@${currentUser.username}`}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-lg transition cursor-pointer"
+              >
+                تسجيل الخروج
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Major Selection Grid */}
+        <main className="flex-1">
+          <MajorSelectionView
+            studentName={currentUser.fullName}
+            currentMajorId={selectedMajor?.id}
+            showCancelButton={!!selectedMajor}
+            onCancel={() => setIsChangingMajor(false)}
+            onSelectMajor={handleSelectMajor}
+          />
+        </main>
+
         <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
           المملكة العربية السعودية • المؤسسة العامة للتدريب التقني والمهني (TVTC)
         </footer>
@@ -266,8 +384,10 @@ export default function App() {
       {/* Top Navbar */}
       <Navbar
         user={currentUser}
+        majorTitle={selectedMajor.nameAr}
         onLogout={handleLogout}
         onOpenJsonModal={() => setIsJsonModalOpen(true)}
+        onChangeMajor={() => setIsChangingMajor(true)}
         isSaving={isSaving}
       />
 
@@ -285,9 +405,11 @@ export default function App() {
         <GpaDashboard
           cumulative={cumulativeCalc}
           currentTermCalc={currentTermCalc}
+          majorTitle={selectedMajor.nameAr}
           onResetGrades={handleResetGrades}
           onFillSampleGrades={handleFillSampleGrades}
           onPrint={() => window.print()}
+          onChangeMajor={() => setIsChangingMajor(true)}
         />
 
         {/* Semester Tabs Navigation with TVTC theme */}

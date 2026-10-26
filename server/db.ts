@@ -6,6 +6,7 @@ export interface UserRecord {
   username: string;
   fullName: string;
   studentId?: string;
+  major_id?: string;
   password_hash: string;
   created_at: string;
 }
@@ -19,6 +20,7 @@ export interface SessionRecord {
 export interface UserGradeRecord {
   id: number;
   user_id: number;
+  major_id?: string;
   course_id: string;
   semester_number: number;
   grade_letter: string | null;
@@ -138,6 +140,16 @@ export async function createUser(
   return newUser;
 }
 
+export async function updateUserMajor(userId: number, majorId: string): Promise<UserRecord | undefined> {
+  const db = loadDatabase();
+  const user = db.users.find((u) => u.id === userId);
+  if (user) {
+    user.major_id = majorId;
+    saveDatabase();
+  }
+  return user;
+}
+
 // Session operations
 export async function createSession(token: string, userId: number): Promise<void> {
   const db = loadDatabase();
@@ -162,9 +174,15 @@ export async function removeSession(token: string): Promise<void> {
 }
 
 // Grades operations
-export async function fetchUserGrades(userId: number): Promise<UserGradeRecord[]> {
+export async function fetchUserGrades(userId: number, majorId?: string): Promise<UserGradeRecord[]> {
   const db = loadDatabase();
-  return db.grades.filter((g) => g.user_id === userId);
+  return db.grades.filter((g) => {
+    if (g.user_id !== userId) return false;
+    if (majorId) {
+      return g.major_id === majorId || (!g.major_id && majorId === 'networks');
+    }
+    return true;
+  });
 }
 
 export async function upsertUserGrades(
@@ -176,25 +194,31 @@ export async function upsertUserGrades(
     numericalScore?: number | null;
     gradePoints?: number | null;
     status?: string;
-  }>
+  }>,
+  majorId: string = 'networks'
 ): Promise<UserGradeRecord[]> {
   const db = loadDatabase();
 
-  // Remove existing grades for this user and rebuild from current valid list
-  const otherUsersGrades = db.grades.filter((g) => g.user_id !== userId);
+  // Remove existing grades for this user and major
+  const keptGrades = db.grades.filter((g) => {
+    if (g.user_id !== userId) return true;
+    const gMajor = g.major_id || 'networks';
+    return gMajor !== majorId;
+  });
+
   const newRecords: UserGradeRecord[] = [];
 
   for (const item of gradesList) {
-    // Only persist courses that have active grade data or in-progress status
     const hasData =
       (item.gradeLetter && item.gradeLetter.trim().length > 0) ||
-      item.numericalScore !== null && item.numericalScore !== undefined ||
+      (item.numericalScore !== null && item.numericalScore !== undefined) ||
       item.status === 'in-progress';
 
     if (hasData) {
       newRecords.push({
         id: db.nextGradeId++,
         user_id: userId,
+        major_id: majorId,
         course_id: item.courseId,
         semester_number: item.semesterNumber,
         grade_letter: item.gradeLetter !== undefined ? item.gradeLetter : null,
@@ -206,26 +230,38 @@ export async function upsertUserGrades(
     }
   }
 
-  db.grades = [...otherUsersGrades, ...newRecords];
+  db.grades = [...keptGrades, ...newRecords];
   saveDatabase();
-  return fetchUserGrades(userId);
+  return fetchUserGrades(userId, majorId);
 }
 
-export async function clearUserGrades(userId: number): Promise<void> {
+export async function clearUserGrades(userId: number, majorId?: string): Promise<void> {
   const db = loadDatabase();
-  db.grades = db.grades.filter((g) => g.user_id !== userId);
+  db.grades = db.grades.filter((g) => {
+    if (g.user_id !== userId) return true;
+    if (majorId) {
+      const gMajor = g.major_id || 'networks';
+      return gMajor !== majorId;
+    }
+    return false;
+  });
   saveDatabase();
 }
 
 export async function clearUserSemesterGrades(
   userId: number,
   semesterNumber: number,
-  courseIds?: string[]
+  courseIds?: string[],
+  majorId?: string
 ): Promise<void> {
   const db = loadDatabase();
   const idSet = courseIds ? new Set(courseIds) : new Set<string>();
   db.grades = db.grades.filter((g) => {
     if (g.user_id !== userId) return true;
+    if (majorId) {
+      const gMajor = g.major_id || 'networks';
+      if (gMajor !== majorId) return true;
+    }
     if (g.semester_number === semesterNumber) return false;
     if (idSet.has(g.course_id)) return false;
     return true;
@@ -233,10 +269,19 @@ export async function clearUserSemesterGrades(
   saveDatabase();
 }
 
-export async function clearUserSingleCourseGrade(userId: number, courseId: string): Promise<void> {
+export async function clearUserSingleCourseGrade(
+  userId: number,
+  courseId: string,
+  majorId?: string
+): Promise<void> {
   const db = loadDatabase();
-  db.grades = db.grades.filter(
-    (g) => !(g.user_id === userId && g.course_id === courseId)
-  );
+  db.grades = db.grades.filter((g) => {
+    if (g.user_id !== userId) return true;
+    if (majorId) {
+      const gMajor = g.major_id || 'networks';
+      if (gMajor !== majorId) return true;
+    }
+    return g.course_id !== courseId;
+  });
   saveDatabase();
 }
