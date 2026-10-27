@@ -14,6 +14,12 @@ import MajorSelectionView from './components/MajorSelectionView.tsx';
 import { ALL_MAJORS, MajorInfo, getMajorById } from './data/all_majors.ts';
 import { User, CourseGradeState, StudyPlanData } from './types.ts';
 import { calculateCumulativeGPA, calculateSemesterGPA, findCourseSemester } from './utils/calculator.ts';
+import {
+  loadCourseSemesterOverrides,
+  saveCourseSemesterOverrides,
+  clearCourseSemesterOverrides,
+  buildEffectiveStudyPlan,
+} from './utils/planCustomizer.ts';
 import { Layers, CheckCircle2, Bookmark, GraduationCap, AlertTriangle, RotateCcw, X } from 'lucide-react';
 import {
   apiGetMe,
@@ -37,6 +43,9 @@ export default function App() {
   });
   const [isChangingMajor, setIsChangingMajor] = useState(false);
 
+  // Custom Course Semester Overrides (e.g. Taking English 2 in Semester 4)
+  const [courseOverrides, setCourseOverrides] = useState<Record<string, number>>({});
+
   const [activeTab, setActiveTab] = useState<number | 'full'>(1);
   const [gradesMap, setGradesMap] = useState<Record<string, CourseGradeState>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -49,10 +58,13 @@ export default function App() {
     onConfirm: () => void;
   } | null>(null);
 
-  // Current active study plan
-  const studyPlan: StudyPlanData = useMemo(() => {
-    return selectedMajor ? selectedMajor.plan : ALL_MAJORS[0].plan;
-  }, [selectedMajor]);
+  // Build Effective Study Plan with flexible course relocation
+  const { effectivePlan, originalSemesterMap, allCoursesList, hasOverrides } = useMemo(() => {
+    const basePlan = selectedMajor ? selectedMajor.plan : ALL_MAJORS[0].plan;
+    return buildEffectiveStudyPlan(basePlan, courseOverrides);
+  }, [selectedMajor, courseOverrides]);
+
+  const studyPlan: StudyPlanData = effectivePlan;
 
   // Check auth session on startup
   useEffect(() => {
@@ -77,9 +89,13 @@ export default function App() {
       });
   }, []);
 
-  // Fetch saved grades when user logs in or switches major
+  // Fetch saved grades and custom plan overrides when user logs in or switches major
   useEffect(() => {
     if (!currentUser || !selectedMajor) return;
+
+    // Load custom course semester overrides for this user and major
+    const overrides = loadCourseSemesterOverrides(currentUser.id, selectedMajor.id);
+    setCourseOverrides(overrides);
 
     apiGetGrades(currentUser, selectedMajor.id)
       .then((grades) => {
@@ -116,6 +132,9 @@ export default function App() {
     if (currentUser) {
       const updated = apiSaveUserMajor(currentUser, major.id);
       setCurrentUser(updated);
+
+      const overrides = loadCourseSemesterOverrides(currentUser.id, major.id);
+      setCourseOverrides(overrides);
 
       // Load grades for the newly selected major
       apiGetGrades(updated, major.id).then((grades) => {
@@ -266,12 +285,68 @@ export default function App() {
     showToast('تمت تعبئة درجات تفوق تجريبية وحفظها في السجل الأكاديمي');
   };
 
+  // Move a course to a different semester (Custom Plan Allocation)
+  const handleMoveCourseSemester = (courseId: string, targetSemester: number) => {
+    const targetCourse = allCoursesList.find((c) => c.id === courseId);
+    const courseName = targetCourse?.nameAr || 'المقرر';
+
+    const nextOverrides = { ...courseOverrides, [courseId]: targetSemester };
+    setCourseOverrides(nextOverrides);
+
+    if (currentUser && selectedMajor) {
+      saveCourseSemesterOverrides(currentUser.id, selectedMajor.id, nextOverrides);
+    }
+
+    // If the course already has a recorded grade, update its semesterNumber
+    setGradesMap((prev) => {
+      if (!prev[courseId]) return prev;
+      const next = {
+        ...prev,
+        [courseId]: { ...prev[courseId], semesterNumber: targetSemester },
+      };
+      saveGradesToDb(next);
+      return next;
+    });
+
+    showToast(`تم نقل مقرر (${courseName}) إلى الفصل ${targetSemester} بنجاح`);
+  };
+
+  // Reset custom course semester distribution back to official TVTC default plan
+  const handleResetCustomPlan = () => {
+    setConfirmResetModal({
+      isOpen: true,
+      title: 'تأكيد استعادة التوزيع الافتراضي للخطة',
+      description:
+        'هل ترغب بإعادة جميع المقررات الدراسية المنقولة إلى فصولها التدريبية الأصلية المعتمدة بالكلية؟ لن تُحذف أي من درجاتك المدخلة.',
+      onConfirm: () => {
+        setCourseOverrides({});
+        if (currentUser && selectedMajor) {
+          clearCourseSemesterOverrides(currentUser.id, selectedMajor.id);
+        }
+        setGradesMap((prev) => {
+          const next = { ...prev };
+          for (const cid in next) {
+            const orig = originalSemesterMap[cid];
+            if (orig) {
+              next[cid] = { ...next[cid], semesterNumber: orig };
+            }
+          }
+          saveGradesToDb(next);
+          return next;
+        });
+        setConfirmResetModal(null);
+        showToast('تمت استعادة التوزيع الافتراضي المعتمد لمقررات الخطة بنجاح');
+      },
+    });
+  };
+
   // Handle Logout
   const handleLogout = async () => {
     await apiLogout();
     setCurrentUser(null);
     setSelectedMajor(null);
     setIsChangingMajor(false);
+    setCourseOverrides({});
     setGradesMap({});
   };
 
@@ -464,10 +539,16 @@ export default function App() {
         {activeTab !== 'full' && currentSemesterObj && (
           <SemesterView
             semester={currentSemesterObj}
+            allSemesters={studyPlan.semesters}
+            allCoursesList={allCoursesList}
+            originalSemesterMap={originalSemesterMap}
             gradesMap={gradesMap}
+            hasCustomPlan={hasOverrides}
             onUpdateCourseGrade={handleUpdateCourseGrade}
             onResetCourseGrade={handleResetCourseGrade}
             onResetSemesterCourses={handleResetSemesterCourses}
+            onMoveCourseSemester={handleMoveCourseSemester}
+            onResetCustomPlan={handleResetCustomPlan}
           />
         )}
 

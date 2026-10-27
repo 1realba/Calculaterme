@@ -1,5 +1,17 @@
 import { useState, useId, FormEvent } from 'react';
-import { LogIn, UserPlus, Lock, User, Hash, Eye, EyeOff, ShieldCheck, Award, GraduationCap, CheckCircle2 } from 'lucide-react';
+import {
+  LogIn,
+  UserPlus,
+  Lock,
+  User,
+  Hash,
+  Eye,
+  EyeOff,
+  GraduationCap,
+  CheckCircle2,
+  UserCheck,
+  Sparkles,
+} from 'lucide-react';
 import PasswordChecklist, { evaluatePassword } from './PasswordChecklist.tsx';
 import { User as UserType } from '../types.ts';
 import collegeBg from '../assets/images/college_login_bg_1790582952888.jpg';
@@ -10,10 +22,12 @@ interface Props {
 }
 
 export default function AuthView({ onSuccess }: Props) {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'guest'>('login');
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [studentId, setStudentId] = useState('');
+  const [guestFullName, setGuestFullName] = useState('');
+  const [guestStudentId, setGuestStudentId] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -24,6 +38,8 @@ export default function AuthView({ onSuccess }: Props) {
   const usernameId = useId();
   const fullNameId = useId();
   const studentNumId = useId();
+  const guestNameId = useId();
+  const guestNumId = useId();
   const passwordId = useId();
   const confirmPasswordId = useId();
 
@@ -33,6 +49,38 @@ export default function AuthView({ onSuccess }: Props) {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
+
+    if (mode === 'guest') {
+      if (!guestFullName.trim()) {
+        setErrorMsg('يرجى إدخال اسم المتدرب للدخول كضيف');
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const guestUser: UserType = {
+          id: Date.now(),
+          username: `guest_${Date.now().toString().slice(-4)}`,
+          fullName: guestFullName.trim(),
+          studentId: guestStudentId.trim() || undefined,
+          createdAt: new Date().toISOString(),
+        };
+
+        const guestToken = `guest_token_${guestUser.id}`;
+        localStorage.setItem('auth_token', guestToken);
+        localStorage.setItem('tvtc_current_user', JSON.stringify(guestUser));
+
+        setSuccessMsg(`أهلاً بك يا ${guestUser.fullName}! جارِ الدخول إلى البوابة...`);
+        setTimeout(() => {
+          onSuccess(guestUser, guestToken);
+        }, 400);
+      } catch (err: any) {
+        setErrorMsg('حدث خطأ أثناء الدخول كضيف');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     if (mode === 'register') {
       if (!fullName.trim()) {
@@ -101,16 +149,6 @@ export default function AuthView({ onSuccess }: Props) {
     }
   };
 
-  const fillDemoAccount = () => {
-    setMode('register');
-    setUsername('student_tvtc');
-    setFullName('فيصل بن عبدالله القحطاني');
-    setStudentId('44410298');
-    setPassword('Tvtc#2024Pass!');
-    setConfirmPassword('Tvtc#2024Pass!');
-    setErrorMsg('');
-  };
-
   return (
     <div
       className="min-h-screen relative flex items-center justify-center p-4 sm:p-6 bg-cover bg-center bg-no-repeat"
@@ -145,8 +183,8 @@ export default function AuthView({ onSuccess }: Props) {
             </div>
           </div>
 
-          {/* Mode Switch Tabs */}
-          <div className="mt-5 flex bg-black/25 p-1 rounded-xl border border-white/10">
+          {/* Mode Switch Tabs (3 options) */}
+          <div className="mt-5 grid grid-cols-3 bg-black/25 p-1 rounded-xl border border-white/10 gap-1 text-center">
             <button
               id="tab-login-btn"
               type="button"
@@ -155,14 +193,14 @@ export default function AuthView({ onSuccess }: Props) {
                 setErrorMsg('');
                 setSuccessMsg('');
               }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-2 px-1 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                 mode === 'login'
                   ? 'bg-white text-[#005a34] shadow-md shadow-black/10'
                   : 'text-emerald-100 hover:text-white'
               }`}
             >
               <LogIn className="w-3.5 h-3.5" />
-              تسجيل الدخول
+              <span>تسجيل الدخول</span>
             </button>
             <button
               id="tab-register-btn"
@@ -172,14 +210,31 @@ export default function AuthView({ onSuccess }: Props) {
                 setErrorMsg('');
                 setSuccessMsg('');
               }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-2 px-1 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                 mode === 'register'
                   ? 'bg-white text-[#005a34] shadow-md shadow-black/10'
                   : 'text-emerald-100 hover:text-white'
               }`}
             >
               <UserPlus className="w-3.5 h-3.5" />
-              إنشاء حساب متدرب جديد
+              <span>إنشاء حساب</span>
+            </button>
+            <button
+              id="tab-guest-btn"
+              type="button"
+              onClick={() => {
+                setMode('guest');
+                setErrorMsg('');
+                setSuccessMsg('');
+              }}
+              className={`py-2 px-1 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                mode === 'guest'
+                  ? 'bg-[#E6C673] text-[#004e2d] shadow-md shadow-black/10'
+                  : 'text-amber-200 hover:text-white'
+              }`}
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>الدخول كضيف</span>
             </button>
           </div>
         </div>
@@ -200,6 +255,72 @@ export default function AuthView({ onSuccess }: Props) {
             </div>
           )}
 
+          {/* GUEST MODE FORM */}
+          {mode === 'guest' && (
+            <div className="space-y-4">
+              <div className="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-2xl flex items-start gap-3">
+                <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-900 leading-relaxed">
+                  <strong className="block font-bold mb-0.5">الدخول السريع كضيف (بدون كلمة مرور)</strong>
+                  يمكنك الدخول مباشرة وحساب معدلك الفصلي والتراكمي واختيار تخصصك، مع حفظ درجاتك على هذا المتصفح.
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor={guestNameId} className="block text-xs font-bold text-slate-700 mb-1">
+                  اسم المتدرب <span className="text-rose-600">*</span>
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+                  <input
+                    id={guestNameId}
+                    type="text"
+                    required
+                    placeholder="مثال: محمد بن سعد القحطاني"
+                    value={guestFullName}
+                    onChange={(e) => setGuestFullName(e.target.value)}
+                    className="w-full pr-10 pl-3 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006B3F] focus:bg-white transition"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor={guestNumId} className="block text-xs font-bold text-slate-700 mb-1">
+                  الرقم التدريبي / الأكاديمي <span className="text-slate-400 font-normal">(اختياري)</span>
+                </label>
+                <div className="relative">
+                  <Hash className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+                  <input
+                    id={guestNumId}
+                    type="text"
+                    placeholder="مثال: 44410298 (يمكن تركه فارغاً)"
+                    value={guestStudentId}
+                    onChange={(e) => setGuestStudentId(e.target.value)}
+                    className="w-full pr-10 pl-3 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006B3F] focus:bg-white transition"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                id="guest-submit-btn"
+                disabled={loading}
+                className="w-full py-3 px-4 bg-gradient-to-r from-[#006B3F] to-[#044a2e] hover:from-[#005a34] hover:to-[#033c25] active:bg-[#004729] text-white font-bold rounded-xl transition shadow-lg shadow-emerald-950/20 disabled:opacity-50 flex items-center justify-center gap-2 text-sm cursor-pointer border border-[#C5A059]"
+              >
+                {loading ? (
+                  <span className="inline-block animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                ) : (
+                  <>
+                    <UserCheck className="w-4 h-4 text-[#E6C673]" />
+                    <span>الدخول كضيف ومتابعة الخطة الدراسية</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* REGISTER MODE FORM */}
           {mode === 'register' && (
             <>
               <div>
@@ -222,7 +343,7 @@ export default function AuthView({ onSuccess }: Props) {
 
               <div>
                 <label htmlFor={studentNumId} className="block text-xs font-bold text-slate-700 mb-1">
-                  الرقم التدريبي / الأكاديمي (اختياري)
+                  الرقم التدريبي / الأكاديمي <span className="text-slate-400 font-normal">(اختياري)</span>
                 </label>
                 <div className="relative">
                   <Hash className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
@@ -236,65 +357,59 @@ export default function AuthView({ onSuccess }: Props) {
                   />
                 </div>
               </div>
-            </>
-          )}
 
-          <div>
-            <label htmlFor={usernameId} className="block text-xs font-bold text-slate-700 mb-1">
-              اسم المستخدم <span className="text-rose-600">*</span>
-            </label>
-            <div className="relative">
-              <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
-              <input
-                id={usernameId}
-                type="text"
-                required
-                placeholder="اسم المستخدم"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full pr-10 pl-3 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006B3F] focus:bg-white transition"
-                dir="ltr"
-              />
-            </div>
-          </div>
+              <div>
+                <label htmlFor={usernameId} className="block text-xs font-bold text-slate-700 mb-1">
+                  اسم المستخدم <span className="text-rose-600">*</span>
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+                  <input
+                    id={usernameId}
+                    type="text"
+                    required
+                    placeholder="اسم المستخدم"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full pr-10 pl-3 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006B3F] focus:bg-white transition"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label htmlFor={passwordId} className="block text-xs font-bold text-slate-700">
-                كلمة المرور <span className="text-rose-600">*</span>
-              </label>
-              {mode === 'register' && (
-                <span className="text-[11px] font-bold text-emerald-800">
-                  {evalResult.strengthLabel}
-                </span>
-              )}
-            </div>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
-              <input
-                id={passwordId}
-                type={showPassword ? 'text' : 'password'}
-                required
-                placeholder="أدخل كلمة المرور"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pr-10 pl-10 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006B3F] focus:bg-white transition font-mono"
-                dir="ltr"
-              />
-              <button
-                type="button"
-                id="toggle-password-visibility-btn"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute left-3 top-3 text-slate-400 hover:text-slate-600 focus:outline-none"
-                title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label htmlFor={passwordId} className="block text-xs font-bold text-slate-700">
+                    كلمة المرور <span className="text-rose-600">*</span>
+                  </label>
+                  <span className="text-[11px] font-bold text-emerald-800">
+                    {evalResult.strengthLabel}
+                  </span>
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+                  <input
+                    id={passwordId}
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="أدخل كلمة المرور"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pr-10 pl-10 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006B3F] focus:bg-white transition font-mono"
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    id="toggle-password-visibility-btn"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute left-3 top-3 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
 
-          {mode === 'register' && (
-            <>
               {/* College Password Requirements Checklist */}
               <PasswordChecklist password={password} criteria={evalResult.criteria} />
 
@@ -316,31 +431,113 @@ export default function AuthView({ onSuccess }: Props) {
                   />
                 </div>
               </div>
+
+              <button
+                type="submit"
+                id="auth-register-submit-btn"
+                disabled={loading}
+                className="w-full py-3 px-4 bg-[#006B3F] hover:bg-[#005a34] active:bg-[#004729] text-white font-bold rounded-xl transition shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center justify-center gap-2 text-sm cursor-pointer"
+              >
+                {loading ? (
+                  <span className="inline-block animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                ) : (
+                  <>
+                    <UserPlus className="w-4 h-4" />
+                    <span>إنشاء حساب متدرب جديد</span>
+                  </>
+                )}
+              </button>
             </>
           )}
 
-          <button
-            type="submit"
-            id="auth-submit-btn"
-            disabled={loading}
-            className="w-full py-3 px-4 bg-[#006B3F] hover:bg-[#005a34] active:bg-[#004729] text-white font-bold rounded-xl transition shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center justify-center gap-2 text-sm cursor-pointer"
-          >
-            {loading ? (
-              <span className="inline-block animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-            ) : mode === 'login' ? (
-              <>
-                <LogIn className="w-4 h-4" />
-                تسجيل الدخول إلى البوابة
-              </>
-            ) : (
-              <>
-                <UserPlus className="w-4 h-4" />
-                إنشاء حساب متدرب جديد
-              </>
-            )}
-          </button>
+          {/* LOGIN MODE FORM */}
+          {mode === 'login' && (
+            <>
+              <div>
+                <label htmlFor={usernameId} className="block text-xs font-bold text-slate-700 mb-1">
+                  اسم المستخدم <span className="text-rose-600">*</span>
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+                  <input
+                    id={usernameId}
+                    type="text"
+                    required
+                    placeholder="اسم المستخدم"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full pr-10 pl-3 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006B3F] focus:bg-white transition"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
 
-          <div className="pt-2 flex flex-col items-center gap-2 text-xs text-slate-600 text-center">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label htmlFor={passwordId} className="block text-xs font-bold text-slate-700">
+                    كلمة المرور <span className="text-rose-600">*</span>
+                  </label>
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+                  <input
+                    id={passwordId}
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="أدخل كلمة المرور"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pr-10 pl-10 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006B3F] focus:bg-white transition font-mono"
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    id="toggle-password-visibility-btn"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute left-3 top-3 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                id="auth-login-submit-btn"
+                disabled={loading}
+                className="w-full py-3 px-4 bg-[#006B3F] hover:bg-[#005a34] active:bg-[#004729] text-white font-bold rounded-xl transition shadow-lg shadow-emerald-900/20 disabled:opacity-50 flex items-center justify-center gap-2 text-sm cursor-pointer"
+              >
+                {loading ? (
+                  <span className="inline-block animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                ) : (
+                  <>
+                    <LogIn className="w-4 h-4" />
+                    <span>تسجيل الدخول إلى البوابة</span>
+                  </>
+                )}
+              </button>
+            </>
+          )}
+
+          {/* Quick Footer Links / Alternative Mode Toggles */}
+          <div className="pt-2 flex flex-col items-center gap-2.5 text-xs text-slate-600 text-center border-t border-slate-100">
+            {mode !== 'guest' && (
+              <button
+                type="button"
+                id="quick-guest-entry-btn"
+                onClick={() => {
+                  setMode('guest');
+                  setErrorMsg('');
+                  setSuccessMsg('');
+                }}
+                className="w-full py-2 px-3 bg-amber-50 hover:bg-amber-100/80 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <UserCheck className="w-4 h-4 text-amber-700" />
+                <span>أو الدخول السريع كضيف (بدون كلمة مرور)</span>
+              </button>
+            )}
+
             {mode === 'login' ? (
               <p>
                 متدرب جديد وليس لديك حساب بعد؟{' '}
@@ -350,13 +547,14 @@ export default function AuthView({ onSuccess }: Props) {
                   onClick={() => {
                     setMode('register');
                     setErrorMsg('');
+                    setSuccessMsg('');
                   }}
-                  className="text-[#006B3F] hover:text-[#004729] hover:underline font-bold"
+                  className="text-[#006B3F] hover:text-[#004729] hover:underline font-bold cursor-pointer"
                 >
                   إنشاء حساب متدرب جديد
                 </button>
               </p>
-            ) : (
+            ) : mode === 'register' ? (
               <p>
                 لديك حساب مسجل مسبقاً بالبوابة؟{' '}
                 <button
@@ -365,22 +563,30 @@ export default function AuthView({ onSuccess }: Props) {
                   onClick={() => {
                     setMode('login');
                     setErrorMsg('');
+                    setSuccessMsg('');
                   }}
-                  className="text-[#006B3F] hover:text-[#004729] hover:underline font-bold"
+                  className="text-[#006B3F] hover:text-[#004729] hover:underline font-bold cursor-pointer"
                 >
                   تسجيل الدخول من هنا
                 </button>
               </p>
+            ) : (
+              <p>
+                ترغب بتسجيل الدخول بحسابك المحفوظ؟{' '}
+                <button
+                  type="button"
+                  id="guest-switch-login-btn"
+                  onClick={() => {
+                    setMode('login');
+                    setErrorMsg('');
+                    setSuccessMsg('');
+                  }}
+                  className="text-[#006B3F] hover:text-[#004729] hover:underline font-bold cursor-pointer"
+                >
+                  العودة لتسجيل الدخول
+                </button>
+              </p>
             )}
-
-            <button
-              type="button"
-              id="fill-demo-data-btn"
-              onClick={fillDemoAccount}
-              className="mt-1 text-[11px] text-slate-400 hover:text-[#006B3F] underline"
-            >
-              تعبئة بيانات حساب تجريبي سريع للاختبار
-            </button>
           </div>
         </form>
 
