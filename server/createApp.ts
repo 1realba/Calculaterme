@@ -14,6 +14,11 @@ import {
   resetSingleCourseGrade,
   getStudyPlan,
 } from './grades.ts';
+import {
+  fetchCustomMajors,
+  upsertCustomMajor,
+  removeCustomMajor,
+} from './db.ts';
 
 export function createApp() {
   const app = express();
@@ -200,6 +205,62 @@ export function createApp() {
       });
     } catch (err: any) {
       res.status(500).json({ error: 'فشل في تصفير المادة' });
+    }
+  });
+
+  // Custom Majors - GET
+  app.get('/api/custom-majors', async (req: any, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+      let userId: number | undefined;
+      if (token) {
+        const user = await authenticateToken(token);
+        if (user) userId = user.id;
+      }
+      const majors = await fetchCustomMajors(userId);
+      res.json({ success: true, majors });
+    } catch (err: any) {
+      res.status(500).json({ error: 'تعذر استرجاع التخصصات المخصصة' });
+    }
+  });
+
+  // Custom Majors - POST (save/create)
+  app.post('/api/custom-majors', async (req: any, res) => {
+    try {
+      const { major } = req.body;
+      if (!major || !major.id || !major.nameAr) {
+        return res.status(400).json({ error: 'بيانات التخصص غير مكتملة' });
+      }
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+      let userId: number | undefined;
+      if (token) {
+        const user = await authenticateToken(token);
+        if (user) userId = user.id;
+      }
+      const saved = await upsertCustomMajor(major, userId);
+      res.json({ success: true, major: saved });
+    } catch (err: any) {
+      res.status(500).json({ error: 'فشل حفظ التخصص المخصص' });
+    }
+  });
+
+  // Custom Majors - DELETE
+  app.delete('/api/custom-majors/:id', async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+      let userId: number | undefined;
+      if (token) {
+        const user = await authenticateToken(token);
+        if (user) userId = user.id;
+      }
+      await removeCustomMajor(id, userId);
+      res.json({ success: true, message: 'تم حذف التخصص المخصص بنجاح' });
+    } catch (err: any) {
+      res.status(500).json({ error: 'فشل حذف التخصص المخصص' });
     }
   });
 

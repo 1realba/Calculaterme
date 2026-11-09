@@ -11,6 +11,10 @@ import SemesterView from './components/SemesterView.tsx';
 import FullPlanSummary from './components/FullPlanSummary.tsx';
 import StudyPlanModal from './components/StudyPlanModal.tsx';
 import MajorSelectionView from './components/MajorSelectionView.tsx';
+import EditProfileModal from './components/EditProfileModal.tsx';
+import AddSemesterModal from './components/AddSemesterModal.tsx';
+import CreateCustomMajorModal from './components/CreateCustomMajorModal.tsx';
+import ImportPlanFileModal from './components/ImportPlanFileModal.tsx';
 import { ALL_MAJORS, MajorInfo, getMajorById } from './data/all_majors.ts';
 import { User, CourseGradeState, StudyPlanData } from './types.ts';
 import { calculateCumulativeGPA, calculateSemesterGPA, findCourseSemester } from './utils/calculator.ts';
@@ -19,8 +23,28 @@ import {
   saveCourseSemesterOverrides,
   clearCourseSemesterOverrides,
   buildEffectiveStudyPlan,
+  loadExtraSemesters,
+  saveExtraSemesters,
+  cascadeCourseSemesterChange,
+  ExtraSemesterDef,
 } from './utils/planCustomizer.ts';
-import { Layers, CheckCircle2, Bookmark, GraduationCap, AlertTriangle, RotateCcw, X } from 'lucide-react';
+import {
+  loadLocalCustomMajors,
+  syncCustomMajorsFromServer,
+  deleteCustomMajor,
+} from './utils/customMajors.ts';
+import {
+  Layers,
+  CheckCircle2,
+  Bookmark,
+  GraduationCap,
+  AlertTriangle,
+  RotateCcw,
+  X,
+  PlusCircle,
+  CalendarPlus,
+  BookPlus,
+} from 'lucide-react';
 import {
   apiGetMe,
   apiGetGrades,
@@ -36,21 +60,33 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
+  // Custom User-Created Majors list (stored locally & in DB)
+  const [customMajors, setCustomMajors] = useState<MajorInfo[]>(() => loadLocalCustomMajors());
+
   // Selected Major state
   const [selectedMajor, setSelectedMajor] = useState<MajorInfo | null>(() => {
     const savedMajorId = localStorage.getItem('tvtc_active_major_id');
-    return savedMajorId ? getMajorById(savedMajorId) : null;
+    const customs = loadLocalCustomMajors();
+    return savedMajorId ? getMajorById(savedMajorId, customs) : null;
   });
   const [isChangingMajor, setIsChangingMajor] = useState(false);
 
   // Custom Course Semester Overrides (e.g. Taking English 2 in Semester 4)
   const [courseOverrides, setCourseOverrides] = useState<Record<string, number>>({});
 
+  // Extra Semesters (e.g. Semester 6, 7, Summer Semester)
+  const [extraSemesters, setExtraSemesters] = useState<ExtraSemesterDef[]>([]);
+
   const [activeTab, setActiveTab] = useState<number | 'full'>(1);
   const [gradesMap, setGradesMap] = useState<Record<string, CourseGradeState>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [isAddSemesterOpen, setIsAddSemesterOpen] = useState(false);
+  const [isCreateMajorOpen, setIsCreateMajorOpen] = useState(false);
+  const [isImportFileOpen, setIsImportFileOpen] = useState(false);
+
   const [confirmResetModal, setConfirmResetModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -58,22 +94,40 @@ export default function App() {
     onConfirm: () => void;
   } | null>(null);
 
-  // Build Effective Study Plan with flexible course relocation
+  // Build Effective Study Plan with flexible course relocation and dynamic extra semesters
   const { effectivePlan, originalSemesterMap, allCoursesList, hasOverrides } = useMemo(() => {
     const basePlan = selectedMajor ? selectedMajor.plan : ALL_MAJORS[0].plan;
-    return buildEffectiveStudyPlan(basePlan, courseOverrides);
-  }, [selectedMajor, courseOverrides]);
+    return buildEffectiveStudyPlan(basePlan, courseOverrides, extraSemesters);
+  }, [selectedMajor, courseOverrides, extraSemesters]);
 
   const studyPlan: StudyPlanData = effectivePlan;
 
-  // Check auth session on startup
+  // Show toast notification
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4000);
+  };
+
+  // Check auth session & sync custom majors on startup
   useEffect(() => {
+    const token = localStorage.getItem('auth_token') || undefined;
+
+    // Sync custom majors from server if database is configured
+    syncCustomMajorsFromServer(token).then((serverMajors) => {
+      if (serverMajors.length > 0) {
+        setCustomMajors(serverMajors);
+      }
+    });
+
     apiGetMe()
       .then((user) => {
         if (user) {
           setCurrentUser(user);
           if (user.majorId) {
-            const major = getMajorById(user.majorId);
+            const customs = loadLocalCustomMajors();
+            const major = getMajorById(user.majorId, customs);
             setSelectedMajor(major);
             localStorage.setItem('tvtc_active_major_id', major.id);
           }
@@ -89,13 +143,17 @@ export default function App() {
       });
   }, []);
 
-  // Fetch saved grades and custom plan overrides when user logs in or switches major
+  // Fetch saved grades, custom plan overrides, and extra semesters when user logs in or switches major
   useEffect(() => {
     if (!currentUser || !selectedMajor) return;
 
-    // Load custom course semester overrides for this user and major
+    // Load custom course semester overrides
     const overrides = loadCourseSemesterOverrides(currentUser.id, selectedMajor.id);
     setCourseOverrides(overrides);
+
+    // Load extra semesters
+    const extras = loadExtraSemesters(currentUser.id, selectedMajor.id);
+    setExtraSemesters(extras);
 
     apiGetGrades(currentUser, selectedMajor.id)
       .then((grades) => {
@@ -114,14 +172,6 @@ export default function App() {
       });
   }, [currentUser, selectedMajor]);
 
-  // Show toast notification
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3000);
-  };
-
   // Handle Major Selection
   const handleSelectMajor = (major: MajorInfo) => {
     setSelectedMajor(major);
@@ -135,6 +185,9 @@ export default function App() {
 
       const overrides = loadCourseSemesterOverrides(currentUser.id, major.id);
       setCourseOverrides(overrides);
+
+      const extras = loadExtraSemesters(currentUser.id, major.id);
+      setExtraSemesters(extras);
 
       // Load grades for the newly selected major
       apiGetGrades(updated, major.id).then((grades) => {
@@ -151,7 +204,44 @@ export default function App() {
     showToast(`تم اختيار تخصص: ${major.nameAr}`);
   };
 
-  // Save grades to persistent store
+  // Handle Newly Created Custom Major
+  const handleMajorCreated = (newMajor: MajorInfo) => {
+    setCustomMajors((prev) => [newMajor, ...prev.filter((m) => m.id !== newMajor.id)]);
+    setSelectedMajor(newMajor);
+    setIsChangingMajor(false);
+    setActiveTab(1);
+    localStorage.setItem('tvtc_active_major_id', newMajor.id);
+
+    if (currentUser) {
+      const updated = apiSaveUserMajor(currentUser, newMajor.id);
+      setCurrentUser(updated);
+      setCourseOverrides({});
+      setExtraSemesters([]);
+      setGradesMap({});
+    }
+
+    showToast(`تم حفظ وتفعيل التخصص الجديد: "${newMajor.nameAr}" بنجاح!`);
+  };
+
+  // Handle Deleting a Custom Major
+  const handleDeleteCustomMajor = async (majorId: string) => {
+    const token = localStorage.getItem('auth_token') || undefined;
+    await deleteCustomMajor(majorId, token);
+    setCustomMajors((prev) => prev.filter((m) => m.id !== majorId));
+
+    if (selectedMajor?.id === majorId) {
+      const fallback = ALL_MAJORS[0];
+      setSelectedMajor(fallback);
+      localStorage.setItem('tvtc_active_major_id', fallback.id);
+      if (currentUser) {
+        const updated = apiSaveUserMajor(currentUser, fallback.id);
+        setCurrentUser(updated);
+      }
+    }
+    showToast('تم حذف التخصص المخصص بنجاح');
+  };
+
+  // Save grades to persistent store (Instantly on every change)
   const saveGradesToDb = useCallback(
     async (updatedMap: Record<string, CourseGradeState>) => {
       if (!currentUser || !selectedMajor) return;
@@ -169,7 +259,7 @@ export default function App() {
     [currentUser, selectedMajor]
   );
 
-  // Update a course grade
+  // Update a course grade (Real-time single course entry)
   const handleUpdateCourseGrade = (courseId: string, updates: Partial<CourseGradeState>) => {
     const semNum = findCourseSemester(courseId, studyPlan);
     setGradesMap((prev) => {
@@ -181,7 +271,7 @@ export default function App() {
       const nextState = { ...existing, ...updates, semesterNumber: semNum };
       const updatedMap = { ...prev, [courseId]: nextState };
 
-      // Trigger debounced save
+      // Trigger instant save
       saveGradesToDb(updatedMap);
       return updatedMap;
     });
@@ -285,30 +375,100 @@ export default function App() {
     showToast('تمت تعبئة درجات تفوق تجريبية وحفظها في السجل الأكاديمي');
   };
 
-  // Move a course to a different semester (Custom Plan Allocation)
+  // Move a course to a different semester WITH AUTOMATIC PREREQUISITE CASCADE
   const handleMoveCourseSemester = (courseId: string, targetSemester: number) => {
+    // 1. Run prerequisite verification and downstream cascade
+    const cascade = cascadeCourseSemesterChange(
+      courseId,
+      targetSemester,
+      allCoursesList,
+      courseOverrides,
+      originalSemesterMap
+    );
+
+    if (!cascade.success) {
+      showToast(cascade.errorMessage || 'لا يمكن نقل المقرر لمخالفته شروط المتطلب السابق');
+      return;
+    }
+
+    // 2. Save next overrides
+    setCourseOverrides(cascade.nextOverrides);
+
+    if (currentUser && selectedMajor) {
+      saveCourseSemesterOverrides(currentUser.id, selectedMajor.id, cascade.nextOverrides);
+    }
+
+    // 3. Update semester numbers in gradesMap for any moved or cascaded courses
+    setGradesMap((prev) => {
+      let hasChanges = false;
+      const next = { ...prev };
+      for (const cid in cascade.nextOverrides) {
+        if (next[cid] && next[cid].semesterNumber !== cascade.nextOverrides[cid]) {
+          next[cid] = { ...next[cid], semesterNumber: cascade.nextOverrides[cid] };
+          hasChanges = true;
+        }
+      }
+      if (hasChanges) {
+        saveGradesToDb(next);
+        return next;
+      }
+      return prev;
+    });
+
+    // 4. Construct clear, helpful user feedback
     const targetCourse = allCoursesList.find((c) => c.id === courseId);
     const courseName = targetCourse?.nameAr || 'المقرر';
 
-    const nextOverrides = { ...courseOverrides, [courseId]: targetSemester };
-    setCourseOverrides(nextOverrides);
+    if (cascade.shiftedCourses.length > 0) {
+      const shiftedDescriptions = cascade.shiftedCourses
+        .map((s) => `${s.course.nameAr} ➔ الفصل ${s.toSem}`)
+        .join('، ');
+      showToast(
+        `تم نقل (${courseName}) للفصل ${targetSemester}، وتم ترحيل المتطلبات التالية تلقائياً: (${shiftedDescriptions}) للحفاظ على التسلسل الأكاديمي المعتمد`
+      );
+    } else {
+      showToast(`تم نقل مقرر (${courseName}) إلى الفصل ${targetSemester} بنجاح`);
+    }
+  };
 
-    if (currentUser && selectedMajor) {
-      saveCourseSemesterOverrides(currentUser.id, selectedMajor.id, nextOverrides);
+  // Add an Extra Semester
+  const handleAddSemester = (semNum: number, nameAr: string, nameEn: string) => {
+    if (!currentUser || !selectedMajor) return;
+
+    const newDef: ExtraSemesterDef = {
+      semesterNumber: semNum,
+      nameAr,
+      nameEn,
+    };
+
+    const nextExtras = [...extraSemesters.filter((e) => e.semesterNumber !== semNum), newDef].sort(
+      (a, b) => a.semesterNumber - b.semesterNumber
+    );
+
+    setExtraSemesters(nextExtras);
+    saveExtraSemesters(currentUser.id, selectedMajor.id, nextExtras);
+    setActiveTab(semNum);
+    showToast(`تم إضافة (${nameAr}) بنجاح! يمكنك الآن نقل وتوزيع المقررات فيه`);
+  };
+
+  // Delete an Extra Semester
+  const handleDeleteSemester = (semNum: number) => {
+    if (!currentUser || !selectedMajor) return;
+
+    // Check if courses are assigned to this semester
+    const coursesInSem = studyPlan.semesters.find((s) => s.semesterNumber === semNum)?.courses || [];
+    if (coursesInSem.length > 0) {
+      showToast('يرجى أولاً نقل المقررات الموجودة في هذا الفصل إلى فصل آخر قبل حذفه');
+      return;
     }
 
-    // If the course already has a recorded grade, update its semesterNumber
-    setGradesMap((prev) => {
-      if (!prev[courseId]) return prev;
-      const next = {
-        ...prev,
-        [courseId]: { ...prev[courseId], semesterNumber: targetSemester },
-      };
-      saveGradesToDb(next);
-      return next;
-    });
+    const nextExtras = extraSemesters.filter((e) => e.semesterNumber !== semNum);
+    setExtraSemesters(nextExtras);
+    saveExtraSemesters(currentUser.id, selectedMajor.id, nextExtras);
 
-    showToast(`تم نقل مقرر (${courseName}) إلى الفصل ${targetSemester} بنجاح`);
+    // Switch to first semester
+    setActiveTab(1);
+    showToast('تم حذف الفصل الدراسي الإضافي بنجاح');
   };
 
   // Reset custom course semester distribution back to official TVTC default plan
@@ -340,6 +500,44 @@ export default function App() {
     });
   };
 
+  // Update Trainee Profile (Name / Student ID)
+  const handleSaveProfile = (updated: { fullName: string; studentId?: string }) => {
+    if (!currentUser) return;
+    const updatedUser: User = {
+      ...currentUser,
+      fullName: updated.fullName,
+      studentId: updated.studentId,
+    };
+    setCurrentUser(updatedUser);
+
+    // If guest, update local guest profile
+    if (currentUser.username === 'guest' || !currentUser.studentId || currentUser.username.startsWith('guest_')) {
+      try {
+        const existingGuest = localStorage.getItem('tvtc_guest_profile');
+        const guestData = existingGuest ? JSON.parse(existingGuest) : {};
+        localStorage.setItem(
+          'tvtc_guest_profile',
+          JSON.stringify({
+            ...guestData,
+            fullName: updated.fullName,
+            studentId: updated.studentId,
+          })
+        );
+      } catch (e) {
+        console.error('Error saving guest profile:', e);
+      }
+    }
+
+    // Save session in local storage
+    try {
+      localStorage.setItem('tvtc_current_user', JSON.stringify(updatedUser));
+    } catch (e) {
+      console.error(e);
+    }
+
+    showToast('تم تحديث بيانات المتدرب بنجاح');
+  };
+
   // Handle Logout
   const handleLogout = async () => {
     await apiLogout();
@@ -347,6 +545,7 @@ export default function App() {
     setSelectedMajor(null);
     setIsChangingMajor(false);
     setCourseOverrides({});
+    setExtraSemesters([]);
     setGradesMap({});
   };
 
@@ -360,6 +559,12 @@ export default function App() {
     return calculateSemesterGPA(activeTab, studyPlan, gradesMap);
   }, [activeTab, studyPlan, gradesMap]);
 
+  // Determine next semester number for the Add Semester modal
+  const nextSemesterNumber = useMemo(() => {
+    const existing = studyPlan.semesters.map((s) => s.semesterNumber);
+    return Math.max(5, ...existing) + 1;
+  }, [studyPlan]);
+
   if (isAuthLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f5f7fa]">
@@ -371,19 +576,20 @@ export default function App() {
     );
   }
 
-  // Not logged in: Show Auth (Login / Register) View
+  // Not logged in: Show Auth (Login / Register / Guest) View
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-[#f5f7fa] flex flex-col justify-between">
         <AuthView
           onSuccess={(user) => {
             setCurrentUser(user);
+            const customs = loadLocalCustomMajors();
             if (user.majorId) {
-              const major = getMajorById(user.majorId);
+              const major = getMajorById(user.majorId, customs);
               setSelectedMajor(major);
               localStorage.setItem('tvtc_active_major_id', major.id);
             } else {
-              setSelectedMajor(null); // Triggers Major Selection screen!
+              setSelectedMajor(null); // Triggers Major Selection screen
             }
             showToast(`أهلاً بك يا ${user.fullName} في بوابة الكلية التقنية`);
           }}
@@ -408,7 +614,7 @@ export default function App() {
               </div>
               <div>
                 <span className="font-extrabold text-slate-900 text-sm block">الكلية التقنية</span>
-                <span className="text-[11px] text-slate-500">قسم الحاسب وتقنية المعلومات</span>
+                <span className="text-[11px] text-slate-500">المؤسسة العامة للتدريب التقني والمهني</span>
               </div>
             </div>
 
@@ -419,6 +625,14 @@ export default function App() {
                   {currentUser.studentId ? `الرقم التدريبي: ${currentUser.studentId}` : `@${currentUser.username}`}
                 </span>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setIsEditProfileOpen(true)}
+                className="px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg transition cursor-pointer"
+              >
+                تعديل البيانات
+              </button>
 
               <button
                 type="button"
@@ -436,15 +650,43 @@ export default function App() {
           <MajorSelectionView
             studentName={currentUser.fullName}
             currentMajorId={selectedMajor?.id}
+            customMajors={customMajors}
             showCancelButton={!!selectedMajor}
             onCancel={() => setIsChangingMajor(false)}
             onSelectMajor={handleSelectMajor}
+            onOpenCreateMajorModal={() => setIsCreateMajorOpen(true)}
+            onOpenImportFileModal={() => setIsImportFileOpen(true)}
+            onDeleteCustomMajor={handleDeleteCustomMajor}
           />
         </main>
 
         <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
           المملكة العربية السعودية • المؤسسة العامة للتدريب التقني والمهني (TVTC)
         </footer>
+
+        {/* Edit Profile Modal */}
+        <EditProfileModal
+          isOpen={isEditProfileOpen}
+          currentUser={currentUser}
+          onClose={() => setIsEditProfileOpen(false)}
+          onSave={handleSaveProfile}
+        />
+
+        {/* Create Custom Major Modal */}
+        <CreateCustomMajorModal
+          isOpen={isCreateMajorOpen}
+          token={localStorage.getItem('auth_token') || undefined}
+          onClose={() => setIsCreateMajorOpen(false)}
+          onMajorCreated={handleMajorCreated}
+        />
+
+        {/* Import Plan File Modal */}
+        <ImportPlanFileModal
+          isOpen={isImportFileOpen}
+          token={localStorage.getItem('auth_token') || undefined}
+          onClose={() => setIsImportFileOpen(false)}
+          onPlanImported={handleMajorCreated}
+        />
       </div>
     );
   }
@@ -463,6 +705,8 @@ export default function App() {
         onLogout={handleLogout}
         onOpenJsonModal={() => setIsJsonModalOpen(true)}
         onChangeMajor={() => setIsChangingMajor(true)}
+        onOpenImportPlan={() => setIsImportFileOpen(true)}
+        onEditProfile={() => setIsEditProfileOpen(true)}
         isSaving={isSaving}
       />
 
@@ -470,9 +714,9 @@ export default function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Toast Alert */}
         {toastMessage && (
-          <div className="fixed bottom-6 right-6 z-50 bg-[#004e2d] text-white px-4 py-3 rounded-xl shadow-2xl border border-[#C5A059] flex items-center gap-2 text-xs font-bold animate-bounce">
-            <CheckCircle2 className="w-4 h-4 text-[#E6C673]" />
-            <span>{toastMessage}</span>
+          <div className="fixed bottom-6 right-6 z-50 bg-[#004e2d] text-white px-4 py-3 rounded-xl shadow-2xl border border-[#C5A059] flex items-center gap-2 text-xs font-bold animate-bounce max-w-md">
+            <CheckCircle2 className="w-4 h-4 text-[#E6C673] shrink-0" />
+            <span className="leading-snug">{toastMessage}</span>
           </div>
         )}
 
@@ -487,12 +731,13 @@ export default function App() {
           onChangeMajor={() => setIsChangingMajor(true)}
         />
 
-        {/* Semester Tabs Navigation with TVTC theme */}
+        {/* Semester Tabs Navigation with TVTC theme + Extra Semester Action */}
         <div className="bg-white p-2 rounded-2xl border border-emerald-900/15 shadow-2xs mb-6 overflow-x-auto">
-          <div className="flex gap-1.5 min-w-max">
+          <div className="flex items-center gap-1.5 min-w-max">
             {studyPlan.semesters.map((sem) => {
               const semCalc = calculateSemesterGPA(sem.semesterNumber, studyPlan, gradesMap);
               const isSelected = activeTab === sem.semesterNumber;
+              const isExtra = extraSemesters.some((e) => e.semesterNumber === sem.semesterNumber);
 
               return (
                 <button
@@ -508,6 +753,11 @@ export default function App() {
                 >
                   <Bookmark className={`w-3.5 h-3.5 ${isSelected ? 'text-[#E6C673]' : 'text-slate-400'}`} />
                   <span>{sem.nameAr}</span>
+                  {isExtra && (
+                    <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-500/20 text-amber-200 border border-amber-400/40">
+                      إضافي
+                    </span>
+                  )}
                   <span
                     className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
                       isSelected ? 'bg-emerald-900/70 text-emerald-100' : 'bg-slate-100 text-slate-600'
@@ -518,6 +768,18 @@ export default function App() {
                 </button>
               );
             })}
+
+            {/* Add Extra Semester Button */}
+            <button
+              id="btn-add-extra-semester"
+              type="button"
+              onClick={() => setIsAddSemesterOpen(true)}
+              className="py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-emerald-50 text-[#006B3F] hover:bg-emerald-100 border border-emerald-200 cursor-pointer"
+              title="إضافة فصل دراسي سادس أو صيفي لتوزيع المقررات"
+            >
+              <CalendarPlus className="w-3.5 h-3.5 text-[#006B3F]" />
+              <span>+ إضافة فصل دراسي</span>
+            </button>
 
             <button
               id="tab-full-plan-summary"
@@ -530,7 +792,7 @@ export default function App() {
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>الكشف الشامل للخطة (5 فصول)</span>
+              <span>الكشف الشامل للخطة ({studyPlan.semesters.length} فصول)</span>
             </button>
           </div>
         </div>
@@ -542,6 +804,7 @@ export default function App() {
             allSemesters={studyPlan.semesters}
             allCoursesList={allCoursesList}
             originalSemesterMap={originalSemesterMap}
+            courseOverrides={courseOverrides}
             gradesMap={gradesMap}
             hasCustomPlan={hasOverrides}
             onUpdateCourseGrade={handleUpdateCourseGrade}
@@ -549,6 +812,11 @@ export default function App() {
             onResetSemesterCourses={handleResetSemesterCourses}
             onMoveCourseSemester={handleMoveCourseSemester}
             onResetCustomPlan={handleResetCustomPlan}
+            onDeleteSemester={
+              extraSemesters.some((e) => e.semesterNumber === currentSemesterObj.semesterNumber)
+                ? () => handleDeleteSemester(currentSemesterObj.semesterNumber)
+                : undefined
+            }
           />
         )}
 
@@ -573,7 +841,7 @@ export default function App() {
             </span>
           </div>
           <span className="text-[11px] text-slate-500">
-            بوابة المتدربين الإلكترونية • الكلية التقنية • قسم تقنية الحاسب والمعلومات
+            بوابة المتدربين الإلكترونية • الكلية التقنية • قسم التدريب والخطط الدراسية
           </span>
         </div>
       </footer>
@@ -625,6 +893,38 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        isOpen={isEditProfileOpen}
+        currentUser={currentUser}
+        onClose={() => setIsEditProfileOpen(false)}
+        onSave={handleSaveProfile}
+      />
+
+      {/* Add Extra Semester Modal */}
+      <AddSemesterModal
+        isOpen={isAddSemesterOpen}
+        nextSemesterNumber={nextSemesterNumber}
+        onClose={() => setIsAddSemesterOpen(false)}
+        onAddSemester={handleAddSemester}
+      />
+
+      {/* Create Custom Major Modal */}
+      <CreateCustomMajorModal
+        isOpen={isCreateMajorOpen}
+        token={localStorage.getItem('auth_token') || undefined}
+        onClose={() => setIsCreateMajorOpen(false)}
+        onMajorCreated={handleMajorCreated}
+      />
+
+      {/* Import Plan File Modal */}
+      <ImportPlanFileModal
+        isOpen={isImportFileOpen}
+        token={localStorage.getItem('auth_token') || undefined}
+        onClose={() => setIsImportFileOpen(false)}
+        onPlanImported={handleMajorCreated}
+      />
 
       {/* Study Plan JSON Modal */}
       <StudyPlanModal

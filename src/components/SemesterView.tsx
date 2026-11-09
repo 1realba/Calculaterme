@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Semester, CourseGradeState, Course } from '../types.ts';
 import { TVTC_GRADES, getGradeFromScore, getGradeByLetter } from '../utils/calculator.ts';
+import { getMinAllowedSemester } from '../utils/planCustomizer.ts';
 import {
   RotateCcw,
   AlertCircle,
@@ -9,6 +10,10 @@ import {
   X,
   BookOpen,
   Info,
+  Trash2,
+  Lock,
+  CheckCircle2,
+  Zap,
 } from 'lucide-react';
 
 interface Props {
@@ -16,6 +21,7 @@ interface Props {
   allSemesters?: Semester[];
   allCoursesList?: Course[];
   originalSemesterMap?: Record<string, number>;
+  courseOverrides?: Record<string, number>;
   gradesMap: Record<string, CourseGradeState>;
   hasCustomPlan?: boolean;
   onUpdateCourseGrade: (courseId: string, updates: Partial<CourseGradeState>) => void;
@@ -23,12 +29,15 @@ interface Props {
   onResetSemesterCourses?: (semesterNumber: number) => void;
   onMoveCourseSemester?: (courseId: string, targetSemester: number) => void;
   onResetCustomPlan?: () => void;
+  onDeleteSemester?: (semesterNumber: number) => void;
 }
 
 export default function SemesterView({
   semester,
+  allSemesters = [],
   allCoursesList = [],
   originalSemesterMap = {},
+  courseOverrides = {},
   gradesMap,
   hasCustomPlan = false,
   onUpdateCourseGrade,
@@ -36,9 +45,18 @@ export default function SemesterView({
   onResetSemesterCourses,
   onMoveCourseSemester,
   onResetCustomPlan,
+  onDeleteSemester,
 }: Props) {
   const [isAddCourseModalOpen, setIsAddCourseModalOpen] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
+  const [justSavedCourseId, setJustSavedCourseId] = useState<string | null>(null);
+
+  const notifySaved = (courseId: string) => {
+    setJustSavedCourseId(courseId);
+    setTimeout(() => {
+      setJustSavedCourseId((prev) => (prev === courseId ? null : prev));
+    }, 1500);
+  };
 
   const handleGradeLetterChange = (courseId: string, letter: string) => {
     if (!letter) {
@@ -48,6 +66,7 @@ export default function SemesterView({
         numericalScore: undefined,
         status: 'not-taken',
       });
+      notifySaved(courseId);
       return;
     }
     const def = getGradeByLetter(letter);
@@ -58,6 +77,7 @@ export default function SemesterView({
         numericalScore: def.minScore,
         status: 'completed',
       });
+      notifySaved(courseId);
     }
   };
 
@@ -69,6 +89,7 @@ export default function SemesterView({
         gradePoints: undefined,
         status: 'not-taken',
       });
+      notifySaved(courseId);
       return;
     }
     const num = Math.min(100, Math.max(0, parseFloat(valStr) || 0));
@@ -79,6 +100,11 @@ export default function SemesterView({
       gradePoints: def.points,
       status: 'completed',
     });
+    notifySaved(courseId);
+  };
+
+  const handleQuickGradeSelect = (courseId: string, letter: string) => {
+    handleGradeLetterChange(courseId, letter);
   };
 
   const handleSingleCourseReset = (courseId: string) => {
@@ -92,6 +118,7 @@ export default function SemesterView({
         status: 'not-taken',
       });
     }
+    notifySaved(courseId);
   };
 
   const handleSemesterReset = () => {
@@ -113,6 +140,11 @@ export default function SemesterView({
     }
   };
 
+  // Determine all available semester numbers for reassignment
+  const semesterNumbers = allSemesters.length > 0
+    ? allSemesters.map((s) => s.semesterNumber)
+    : [1, 2, 3, 4, 5];
+
   // Courses not currently in this semester
   const availableCoursesToAdd = allCoursesList.filter((c) => {
     const isAlreadyInSem = semester.courses.some((current) => current.id === c.id);
@@ -126,6 +158,8 @@ export default function SemesterView({
     );
   });
 
+  const isExtraSemester = semester.semesterNumber > 5;
+
   return (
     <div className="bg-white rounded-2xl border border-emerald-900/15 shadow-sm overflow-hidden mb-8">
       {/* Semester Header with TVTC College Theme */}
@@ -136,13 +170,18 @@ export default function SemesterView({
               {semester.nameAr}
             </h2>
             <span className="text-xs text-slate-500 font-medium">({semester.nameEn})</span>
+            {isExtraSemester && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                فصل إضافي
+              </span>
+            )}
           </div>
           <p className="text-xs text-slate-600 mt-1">
             إجمالي الساعات المعتمدة: <strong className="text-slate-900 font-bold">{semester.totalCreditHours} ساعة</strong> • ساعات الاتصال: <strong className="text-slate-900 font-bold">{semester.totalContactHours} ساعة</strong> • عدد المقررات: <strong className="text-slate-900 font-bold">{semester.courses.length} مواد</strong>
           </p>
         </div>
 
-        {/* Action Controls: Add Course, Reset Default Layout, Reset Grades */}
+        {/* Action Controls: Add Course, Reset Default Layout, Reset Grades, Delete Extra Semester */}
         <div className="flex items-center flex-wrap gap-2">
           {/* Button to transfer courses from other semesters */}
           {onMoveCourseSemester && (
@@ -151,7 +190,7 @@ export default function SemesterView({
               type="button"
               onClick={() => setIsAddCourseModalOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-[#006B3F] border border-emerald-300 text-xs font-bold rounded-lg transition cursor-pointer"
-              title="إضافة مادة من فصل دراسي آخر لهذا الفصل"
+              title="إضافة أو نقل مادة من فصل دراسي آخر لهذا الفصل"
             >
               <PlusCircle className="w-3.5 h-3.5 text-[#006B3F]" />
               <span>إضافة مقرر لهذا الفصل</span>
@@ -169,6 +208,20 @@ export default function SemesterView({
             >
               <ArrowRightLeft className="w-3.5 h-3.5 text-amber-700" />
               <span>استعادة التوزيع الافتراضي</span>
+            </button>
+          )}
+
+          {/* Delete Extra Semester Button */}
+          {isExtraSemester && onDeleteSemester && (
+            <button
+              id={`delete-extra-semester-${semester.semesterNumber}-btn`}
+              type="button"
+              onClick={() => onDeleteSemester(semester.semesterNumber)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-lg transition cursor-pointer"
+              title="حذف هذا الفصل الإضافي"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              <span>حذف الفصل الإضافي</span>
             </button>
           )}
 
@@ -207,10 +260,13 @@ export default function SemesterView({
         <div className="flex items-center gap-1.5">
           <Info className="w-3.5 h-3.5 text-[#006B3F] shrink-0" />
           <span>
-            يمكنك تخصيص خطتك ونقل أي مقرر لفصل دراسي آخر (مثلاً أخذ إنجليزي 2 في الترم الرابع) من عمود <strong>الفصل / النقل</strong>.
+            <strong>نظام التوزيع الذكي:</strong> يمكنك نقل أي مقرر لفصل آخر، ويقوم النظام تلقائياً بمنع وضع أي مادة قبل متطلبها وتعديل المواد المعتمدة عليها تباعاً.
           </span>
         </div>
-        <span className="font-semibold text-emerald-800 hidden sm:inline">نظام المقررات المرن</span>
+        <span className="font-semibold text-emerald-800 hidden sm:inline flex items-center gap-1">
+          <Zap className="w-3 h-3 text-[#006B3F]" />
+          حفظ وإعادة احتساب فوري للدرجات
+        </span>
       </div>
 
       {/* Empty State if all courses were moved */}
@@ -219,7 +275,7 @@ export default function SemesterView({
           <BookOpen className="w-10 h-10 text-slate-300 mx-auto" />
           <h3 className="font-bold text-slate-700 text-sm">لا توجد مقررات في هذا الفصل حالياً</h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            تم نقل جميع المقررات المخصصة لهذا الفصل إلى فصول أخرى. يمكنك إضافة مقررات إلى هذا الفصل بالضغط على الزر أدناه.
+            تم نقل جميع المقررات المخصصة لهذا الفصل أو أنه فصل إضافي جديد. يمكنك نقل أو إضافة مقررات إليه بالضغط على الزر أدناه.
           </p>
           <button
             type="button"
@@ -227,7 +283,7 @@ export default function SemesterView({
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#006B3F] text-white text-xs font-bold rounded-xl shadow transition hover:bg-[#005a34] cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" />
-            <span>إضافة مقررات لهذا الفصل</span>
+            <span>إضافة ونقل مقررات لهذا الفصل</span>
           </button>
         </div>
       ) : (
@@ -237,7 +293,7 @@ export default function SemesterView({
             <thead>
               <tr className="bg-[#f8faf9] text-slate-700 font-bold border-b border-slate-200">
                 <th className="py-3 px-4">المقرر التدريبي</th>
-                <th className="py-3 px-2 text-center">الفصل / النقل</th>
+                <th className="py-3 px-2 text-center">الفصل / النقل الذكي</th>
                 <th className="py-3 px-3 text-center">الساعات</th>
                 <th className="py-3 px-3 text-center hidden md:table-cell">توزيع الساعات</th>
                 <th className="py-3 px-3">المتطلب السابق</th>
@@ -264,12 +320,23 @@ export default function SemesterView({
 
                 const origSem = originalSemesterMap[course.id];
                 const isRelocated = origSem !== undefined && origSem !== semester.semesterNumber;
+                const isJustSaved = justSavedCourseId === course.id;
+
+                // Check minimum allowed semester based on prerequisites
+                const { minSemester, prerequisiteCourse } = getMinAllowedSemester(
+                  course,
+                  allCoursesList,
+                  courseOverrides,
+                  originalSemesterMap
+                );
 
                 return (
                   <tr
                     key={course.id}
                     className={`hover:bg-emerald-50/30 transition-colors ${
-                      state.status === 'completed'
+                      isJustSaved
+                        ? 'bg-emerald-50/80'
+                        : state.status === 'completed'
                         ? 'bg-white'
                         : state.status === 'in-progress'
                         ? 'bg-amber-50/20'
@@ -283,7 +350,13 @@ export default function SemesterView({
                         {isRelocated && (
                           <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-bold">
                             <ArrowRightLeft className="w-2.5 h-2.5" />
-                            الخطة الأصلية: الفصل {origSem}
+                            الخطة الأصلية: فصل {origSem}
+                          </span>
+                        )}
+                        {isJustSaved && (
+                          <span className="inline-flex items-center gap-1 bg-emerald-100 text-[#006B3F] px-1.5 py-0.5 rounded text-[10px] font-bold animate-pulse">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            تم الحفظ
                           </span>
                         )}
                       </div>
@@ -295,24 +368,42 @@ export default function SemesterView({
                       </div>
                     </td>
 
-                    {/* Semester Reassignment Dropdown (Allows taking English 2 in Semester 4, etc.) */}
+                    {/* Semester Reassignment Dropdown (Enforces Prerequisite Constraint) */}
                     <td className="py-3.5 px-2 text-center">
                       {onMoveCourseSemester ? (
-                        <select
-                          aria-label={`تحديد الفصل التدريبي لمقرر ${course.nameAr}`}
-                          value={semester.semesterNumber}
-                          onChange={(e) =>
-                            onMoveCourseSemester(course.id, parseInt(e.target.value, 10))
-                          }
-                          className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs rounded-lg px-2 py-1 font-bold focus:ring-2 focus:ring-[#006B3F] focus:outline-none cursor-pointer transition"
-                          title="نقل المقرر لفصل دراسي آخر"
-                        >
-                          {[1, 2, 3, 4, 5].map((sNum) => (
-                            <option key={sNum} value={sNum}>
-                              فصل {sNum} {sNum === semester.semesterNumber ? '✓' : ''}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="inline-flex flex-col items-center gap-1">
+                          <select
+                            aria-label={`تحديد الفصل التدريبي لمقرر ${course.nameAr}`}
+                            value={semester.semesterNumber}
+                            onChange={(e) =>
+                              onMoveCourseSemester(course.id, parseInt(e.target.value, 10))
+                            }
+                            className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs rounded-lg px-2 py-1 font-bold focus:ring-2 focus:ring-[#006B3F] focus:outline-none cursor-pointer transition"
+                            title="نقل المقرر لفصل دراسي آخر مع التحقق التلقائي من المتطلبات"
+                          >
+                            {semesterNumbers.map((sNum) => {
+                              const isForbidden = sNum < minSemester;
+                              return (
+                                <option
+                                  key={sNum}
+                                  value={sNum}
+                                  disabled={isForbidden}
+                                >
+                                  فصل {sNum} {sNum === semester.semesterNumber ? '✓' : ''}
+                                  {isForbidden && prerequisiteCourse
+                                    ? ` (ممنوع - يتطلب ${prerequisiteCourse.arabicCode || prerequisiteCourse.nameAr})`
+                                    : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+
+                          {prerequisiteCourse && (
+                            <span className="text-[9px] text-slate-400 font-medium">
+                              أدنى فصل: {minSemester}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-xs font-mono font-bold text-slate-600">
                           فـ{semester.semesterNumber}
@@ -342,12 +433,12 @@ export default function SemesterView({
                       </div>
                     </td>
 
-                    {/* Prerequisite */}
+                    {/* Prerequisite Info Badge */}
                     <td className="py-3.5 px-3 text-[11px]">
                       {course.prerequisite ? (
                         <span className="inline-flex items-center gap-1 text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 font-medium">
                           <AlertCircle className="w-3 h-3 shrink-0 text-amber-600" />
-                          {course.prerequisite}
+                          <span>{course.prerequisite}</span>
                         </span>
                       ) : (
                         <span className="text-slate-400">بدون متطلب</span>
@@ -370,6 +461,7 @@ export default function SemesterView({
                           } else {
                             onUpdateCourseGrade(course.id, { status: newStatus });
                           }
+                          notifySaved(course.id);
                         }}
                         className="bg-white border border-slate-300 text-slate-800 text-xs rounded-lg px-2.5 py-1.5 font-medium focus:ring-2 focus:ring-[#006B3F] focus:outline-none"
                       >
@@ -379,7 +471,7 @@ export default function SemesterView({
                       </select>
                     </td>
 
-                    {/* Numerical Score Input */}
+                    {/* Numerical Score Input (Real-time update) */}
                     <td className="py-3.5 px-3">
                       <div className="relative w-20">
                         <input
@@ -395,21 +487,43 @@ export default function SemesterView({
                       </div>
                     </td>
 
-                    {/* Letter Grade & Points Dropdown */}
+                    {/* Letter Grade & Points Dropdown + Quick Pills */}
                     <td className="py-3.5 px-3">
-                      <select
-                        value={state.gradeLetter || ''}
-                        disabled={state.status !== 'completed'}
-                        onChange={(e) => handleGradeLetterChange(course.id, e.target.value)}
-                        className="bg-white border border-slate-300 text-slate-900 text-xs rounded-lg px-2.5 py-1.5 font-bold focus:ring-2 focus:ring-[#006B3F] focus:outline-none disabled:opacity-40"
-                      >
-                        <option value="">اختر التقدير...</option>
-                        {TVTC_GRADES.map((g) => (
-                          <option key={g.letter} value={g.letter}>
-                            {g.letter} ({g.points.toFixed(2)}) - {g.nameAr}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="space-y-1">
+                        <select
+                          value={state.gradeLetter || ''}
+                          disabled={state.status !== 'completed'}
+                          onChange={(e) => handleGradeLetterChange(course.id, e.target.value)}
+                          className="w-full bg-white border border-slate-300 text-slate-900 text-xs rounded-lg px-2 py-1 font-bold focus:ring-2 focus:ring-[#006B3F] focus:outline-none disabled:opacity-40"
+                        >
+                          <option value="">اختر التقدير...</option>
+                          {TVTC_GRADES.map((g) => (
+                            <option key={g.letter} value={g.letter}>
+                              {g.letter} ({g.points.toFixed(2)}) - {g.nameAr}
+                            </option>
+                          ))}
+                        </select>
+
+                        {/* Fast 1-click grade buttons */}
+                        {state.status === 'completed' && (
+                          <div className="flex items-center gap-1 pt-0.5">
+                            {['A+', 'A', 'B+', 'B'].map((letter) => (
+                              <button
+                                key={letter}
+                                type="button"
+                                onClick={() => handleQuickGradeSelect(course.id, letter)}
+                                className={`px-1.5 py-0.5 text-[10px] rounded font-bold transition cursor-pointer ${
+                                  state.gradeLetter === letter
+                                    ? 'bg-[#006B3F] text-white shadow-2xs'
+                                    : 'bg-slate-100 hover:bg-emerald-50 text-slate-700'
+                                }`}
+                              >
+                                {letter}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </td>
 
                     {/* Points Earned */}
@@ -460,12 +574,13 @@ export default function SemesterView({
             قيد الدراسة
           </span>
         </div>
-        <span className="text-[11px] font-semibold text-[#006B3F]">
-          يتم الحفظ التلقائي للسجل الأكاديمي للمتدرب
+        <span className="text-[11px] font-semibold text-[#006B3F] flex items-center gap-1">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+          الحفظ التلقائي الفوري مفعل للسجل الأكاديمي
         </span>
       </div>
 
-      {/* Modal: Add/Transfer Course to this Semester */}
+      {/* Modal: Add/Transfer Course to this Semester with Prerequisite Verification */}
       {isAddCourseModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 text-right relative max-h-[85vh] flex flex-col">
@@ -480,13 +595,13 @@ export default function SemesterView({
 
             <div className="mb-4">
               <span className="text-xs font-bold text-[#006B3F] bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md inline-block">
-                تخصيص جدول الفصول الدراسية
+                تخصيص جدول الفصول التدريبية
               </span>
               <h3 className="text-lg font-extrabold text-slate-900 mt-2">
                 نقل مقرر إلى {semester.nameAr}
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                اختر أي مقرر ترغب بأخذه ودراسته في {semester.nameAr} من قائمة مقررات التخصص:
+                اختر أي مقرر ترغب بنقله ودراسته في {semester.nameAr} (مع التحقق التلقائي من المتطلبات السابقة):
               </p>
             </div>
 
@@ -494,7 +609,7 @@ export default function SemesterView({
             <div className="mb-4">
               <input
                 type="text"
-                placeholder="ابحث عن اسم المقرر أو الرمز (مثال: إنجليزي، شبكات، برمجة)..."
+                placeholder="ابحث عن اسم المقرر أو الرمز (مثال: إنجليزي، شبكات، برمجة، محاسبة)..."
                 value={searchFilter}
                 onChange={(e) => setSearchFilter(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006B3F] focus:bg-white"
@@ -509,16 +624,35 @@ export default function SemesterView({
                 </div>
               ) : (
                 availableCoursesToAdd.map((course) => {
-                  const currentAssignedSem = originalSemesterMap[course.id] || 1;
+                  const currentAssignedSem = courseOverrides[course.id] || originalSemesterMap[course.id] || 1;
+                  const { minSemester, prerequisiteCourse } = getMinAllowedSemester(
+                    course,
+                    allCoursesList,
+                    courseOverrides,
+                    originalSemesterMap
+                  );
+
+                  const isForbiddenInThisSem = semester.semesterNumber < minSemester;
 
                   return (
                     <div
                       key={course.id}
-                      className="p-3 hover:bg-emerald-50/40 flex items-center justify-between gap-3 transition"
+                      className={`p-3.5 flex items-center justify-between gap-3 transition ${
+                        isForbiddenInThisSem ? 'bg-slate-50/70 opacity-70' : 'hover:bg-emerald-50/40'
+                      }`}
                     >
                       <div>
-                        <div className="font-bold text-slate-900 text-xs">{course.nameAr}</div>
-                        <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+                        <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5 flex-wrap">
+                          <span>{course.nameAr}</span>
+                          {isForbiddenInThisSem && (
+                            <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                              <Lock className="w-3 h-3 text-rose-600" />
+                              غير مسموح قبل الفصل {minSemester}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5 flex-wrap">
                           <span className="font-mono font-bold text-[#006B3F]">
                             {course.arabicCode}
                           </span>
@@ -526,21 +660,45 @@ export default function SemesterView({
                           <span className="text-slate-400">
                             • في الخطة: الفصل {currentAssignedSem}
                           </span>
+                          {prerequisiteCourse && (
+                            <span className="text-amber-800 font-medium">
+                              • المتطلب: {prerequisiteCourse.nameAr}
+                            </span>
+                          )}
                         </div>
                       </div>
 
                       <button
                         type="button"
+                        disabled={isForbiddenInThisSem}
                         onClick={() => {
                           if (onMoveCourseSemester) {
                             onMoveCourseSemester(course.id, semester.semesterNumber);
                             setIsAddCourseModalOpen(false);
                           }
                         }}
-                        className="px-3 py-1.5 bg-[#006B3F] hover:bg-[#005a34] text-white text-xs font-bold rounded-lg shadow-sm transition cursor-pointer flex items-center gap-1 shrink-0"
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-1 shrink-0 ${
+                          isForbiddenInThisSem
+                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                            : 'bg-[#006B3F] hover:bg-[#005a34] text-white cursor-pointer'
+                        }`}
+                        title={
+                          isForbiddenInThisSem
+                            ? `لا يمكن النقل لأن متطلبه السابق في الفصل ${minSemester - 1}`
+                            : 'نقل لهذا الفصل'
+                        }
                       >
-                        <PlusCircle className="w-3.5 h-3.5" />
-                        <span>نقل لهذا الفصل</span>
+                        {isForbiddenInThisSem ? (
+                          <>
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>ممنوع أكاديمياً</span>
+                          </>
+                        ) : (
+                          <>
+                            <PlusCircle className="w-3.5 h-3.5" />
+                            <span>نقل لهذا الفصل</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   );

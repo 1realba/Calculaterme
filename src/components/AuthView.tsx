@@ -26,8 +26,22 @@ export default function AuthView({ onSuccess }: Props) {
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [studentId, setStudentId] = useState('');
-  const [guestFullName, setGuestFullName] = useState('');
-  const [guestStudentId, setGuestStudentId] = useState('');
+  // Check if a guest previously used this browser
+  const [savedGuest, setSavedGuest] = useState<{
+    id: number;
+    fullName: string;
+    studentId?: string;
+    majorId?: string;
+  } | null>(() => {
+    try {
+      const raw = localStorage.getItem('tvtc_guest_profile');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return null;
+  });
+
+  const [guestFullName, setGuestFullName] = useState(savedGuest?.fullName || '');
+  const [guestStudentId, setGuestStudentId] = useState(savedGuest?.studentId || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -58,22 +72,34 @@ export default function AuthView({ onSuccess }: Props) {
 
       setLoading(true);
       try {
+        const guestId = savedGuest?.id || Date.now();
         const guestUser: UserType = {
-          id: Date.now(),
-          username: `guest_${Date.now().toString().slice(-4)}`,
+          id: guestId,
+          username: `guest_${guestId.toString().slice(-4)}`,
           fullName: guestFullName.trim(),
           studentId: guestStudentId.trim() || undefined,
+          majorId: savedGuest?.majorId,
           createdAt: new Date().toISOString(),
         };
 
         const guestToken = `guest_token_${guestUser.id}`;
         localStorage.setItem('auth_token', guestToken);
         localStorage.setItem('tvtc_current_user', JSON.stringify(guestUser));
+        localStorage.setItem(
+          'tvtc_guest_profile',
+          JSON.stringify({
+            id: guestId,
+            fullName: guestUser.fullName,
+            studentId: guestUser.studentId,
+            majorId: guestUser.majorId,
+            savedAt: new Date().toISOString(),
+          })
+        );
 
         setSuccessMsg(`أهلاً بك يا ${guestUser.fullName}! جارِ الدخول إلى البوابة...`);
         setTimeout(() => {
           onSuccess(guestUser, guestToken);
-        }, 400);
+        }, 300);
       } catch (err: any) {
         setErrorMsg('حدث خطأ أثناء الدخول كضيف');
       } finally {
@@ -265,6 +291,18 @@ export default function AuthView({ onSuccess }: Props) {
                   يمكنك الدخول مباشرة وحساب معدلك الفصلي والتراكمي واختيار تخصصك، مع حفظ درجاتك على هذا المتصفح.
                 </div>
               </div>
+
+              {savedGuest && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between text-xs">
+                  <div className="text-emerald-950">
+                    <span className="font-bold block text-emerald-900">مرحباً بعودتك كضيف: {savedGuest.fullName}</span>
+                    <span className="text-[11px] text-emerald-700">سجلك التدريبي ودرجاتك السابقة محفوظة بالكامل.</span>
+                  </div>
+                  <span className="text-[10px] font-mono bg-white px-2.5 py-1 rounded-lg border border-emerald-300 font-bold text-[#006B3F] shrink-0">
+                    سجل محفوظ ✓
+                  </span>
+                </div>
+              )}
 
               <div>
                 <label htmlFor={guestNameId} className="block text-xs font-bold text-slate-700 mb-1">

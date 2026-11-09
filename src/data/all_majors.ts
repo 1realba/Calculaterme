@@ -12,9 +12,10 @@ export interface MajorInfo {
   totalContactHours: number;
   badge: string;
   description: string;
-  iconType: 'network' | 'server' | 'code' | 'support' | 'media';
+  iconType: 'network' | 'server' | 'code' | 'support' | 'media' | 'custom';
   gradient: string;
   plan: StudyPlanData;
+  isCustom?: boolean;
 }
 
 export const COMMON_GRADING_SYSTEM = {
@@ -1730,6 +1731,8 @@ export const ALL_MAJORS: MajorInfo[] = [
   },
 ];
 
-export function getMajorById(id: string): MajorInfo {
+export function getMajorById(id: string, customMajors: MajorInfo[] = []): MajorInfo {
+  const fromCustom = customMajors.find((m) => m.id === id);
+  if (fromCustom) return fromCustom;
   return ALL_MAJORS.find((m) => m.id === id) || ALL_MAJORS[0];
 }

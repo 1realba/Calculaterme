@@ -95,6 +95,14 @@ async function ensurePostgresTables() {
             updated_at TIMESTAMPTZ DEFAULT NOW(),
             CONSTRAINT unique_user_major_course UNIQUE (user_id, major_id, course_id)
           );
+
+          CREATE TABLE IF NOT EXISTS custom_majors (
+            id VARCHAR(100) PRIMARY KEY,
+            user_id INTEGER,
+            name_ar VARCHAR(255) NOT NULL,
+            data JSONB NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          );
         `);
 
         // Check if demo user exists
@@ -130,6 +138,7 @@ interface DatabaseSchema {
   users: UserRecord[];
   sessions: SessionRecord[];
   grades: UserGradeRecord[];
+  customMajors?: any[];
   nextUserId: number;
   nextGradeId: number;
 }
@@ -624,3 +633,67 @@ export async function clearUserSingleCourseGrade(
   });
   saveLocalDatabase();
 }
+
+// ==================== Custom Majors Operations ====================
+
+export async function fetchCustomMajors(userId?: number): Promise<any[]> {
+  if (pgPool) {
+    await ensurePostgresTables();
+    let query = 'SELECT data FROM custom_majors';
+    const params: any[] = [];
+    if (userId) {
+      query += ' WHERE user_id = $1 OR user_id IS NULL';
+      params.push(userId);
+    }
+    const res = await pgPool.query(query, params);
+    return res.rows.map((r: any) => r.data);
+  }
+
+  const db = loadLocalDatabase();
+  return db.customMajors || [];
+}
+
+export async function upsertCustomMajor(major: any, userId?: number): Promise<any> {
+  if (pgPool) {
+    await ensurePostgresTables();
+    await pgPool.query(
+      `INSERT INTO custom_majors (id, user_id, name_ar, data, created_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (id) DO UPDATE SET name_ar = $3, data = $4`,
+      [major.id, userId || null, major.nameAr || 'تخصص مخصص', JSON.stringify(major)]
+    );
+    return major;
+  }
+
+  const db = loadLocalDatabase();
+  if (!db.customMajors) db.customMajors = [];
+  const idx = db.customMajors.findIndex((m: any) => m.id === major.id);
+  if (idx >= 0) {
+    db.customMajors[idx] = major;
+  } else {
+    db.customMajors.push(major);
+  }
+  saveLocalDatabase();
+  return major;
+}
+
+export async function removeCustomMajor(id: string, userId?: number): Promise<void> {
+  if (pgPool) {
+    await ensurePostgresTables();
+    let query = 'DELETE FROM custom_majors WHERE id = $1';
+    const params: any[] = [id];
+    if (userId) {
+      query += ' AND (user_id = $2 OR user_id IS NULL)';
+      params.push(userId);
+    }
+    await pgPool.query(query, params);
+    return;
+  }
+
+  const db = loadLocalDatabase();
+  if (db.customMajors) {
+    db.customMajors = db.customMajors.filter((m: any) => m.id !== id);
+    saveLocalDatabase();
+  }
+}
+

@@ -1,5 +1,5 @@
 import { User } from '../types.ts';
-import { LogOut, FileJson, GraduationCap, CheckCircle2, RefreshCw, Layers } from 'lucide-react';
+import { LogOut, FileJson, GraduationCap, CheckCircle2, RefreshCw, Layers, UserCog, FileUp } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -7,6 +7,8 @@ interface Props {
   onLogout: () => void;
   onOpenJsonModal: () => void;
   onChangeMajor: () => void;
+  onOpenImportPlan?: () => void;
+  onEditProfile?: () => void;
   isSaving?: boolean;
 }
 
@@ -16,6 +18,8 @@ export default function Navbar({
   onLogout,
   onOpenJsonModal,
   onChangeMajor,
+  onOpenImportPlan,
+  onEditProfile,
   isSaving,
 }: Props) {
   return (
@@ -82,6 +86,20 @@ export default function Navbar({
               <span>التخصصات</span>
             </button>
 
+            {/* Quick Import Plan File Button */}
+            {onOpenImportPlan && (
+              <button
+                id="navbar-import-plan-btn"
+                type="button"
+                onClick={onOpenImportPlan}
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#C5A059] bg-[#006B3F] hover:bg-emerald-800 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+                title="استيراد خطة دراسية من ملف PDF أو إكسل محلياً بدون تكلفة"
+              >
+                <FileUp className="w-3.5 h-3.5 text-[#E6C673]" />
+                <span>استيراد خطة</span>
+              </button>
+            )}
+
             {/* Study Plan JSON Button */}
             <button
               id="view-json-plan-btn"
@@ -94,14 +112,28 @@ export default function Navbar({
               <span className="hidden sm:inline">ملف الخطة JSON</span>
             </button>
 
-            {/* Student Name */}
-            <div className="text-left hidden lg:block border-r border-slate-200 pr-3 mr-1">
-              <div className="text-xs font-bold text-slate-900 flex items-center gap-1 justify-end">
-                <span>{user.fullName}</span>
+            {/* Student Name & Edit Profile */}
+            <div className="text-left border-r border-slate-200 pr-3 mr-1 flex items-center gap-2">
+              <div className="hidden sm:block text-right">
+                <div className="text-xs font-bold text-slate-900 flex items-center gap-1 justify-end">
+                  <span>{user.fullName}</span>
+                </div>
+                <div className="text-[11px] text-slate-500 font-mono">
+                  {user.studentId ? `الرقم: ${user.studentId}` : `@${user.username}`}
+                </div>
               </div>
-              <div className="text-[11px] text-slate-500 font-mono">
-                {user.studentId ? `الرقم الأكاديمي: ${user.studentId}` : `@${user.username}`}
-              </div>
+
+              {onEditProfile && (
+                <button
+                  type="button"
+                  id="navbar-edit-profile-btn"
+                  onClick={onEditProfile}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 text-slate-600 hover:text-[#006B3F] text-xs transition cursor-pointer"
+                  title="تعديل اسم المتدرب والرقم التدريبي"
+                >
+                  <UserCog className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             {/* Logout */}
